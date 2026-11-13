@@ -1,0 +1,2241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NASA Mission Hardware Trail</title>
+    <style>
+        :root {
+            --mission-cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='9' fill='%23030712' fill-opacity='.82' stroke='%237dd3fc' stroke-width='1.5'/%3E%3Cpath d='M16 2v8m0 12v8M2 16h8m12 0h8' stroke='%23f97316' stroke-width='2' stroke-linecap='round'/%3E%3Ccircle cx='16' cy='16' r='2' fill='%23f97316'/%3E%3C/svg%3E") 16 16, pointer;
+        }
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #030712;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            color: #f3f4f6;
+            user-select: none;
+        }
+        canvas {
+            width: 100vw;
+            height: 100vh;
+            display: block;
+            cursor: grab;
+        }
+        canvas:active {
+            cursor: grabbing;
+        }
+        canvas.marker-hover,
+        button:not(:disabled),
+        a[href] {
+            cursor: var(--mission-cursor);
+        }
+        
+        /* UI Overlay Header */
+        #header-overlay {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            pointer-events: none;
+            z-index: 10;
+            transition: opacity 0.25s ease;
+        }
+        #header-overlay.is-obscured {
+            opacity: 0;
+        }
+        h1 {
+            margin: 0 0 6px 0;
+            font-size: 1.4rem;
+            font-weight: 600;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            color: #38bdf8;
+            text-shadow: 0 2px 8px rgba(0,0,0,0.8);
+        }
+        p.subtitle {
+            margin: 0;
+            font-size: 0.85rem;
+            color: #9ca3af;
+            text-shadow: 0 1px 4px rgba(0,0,0,0.8);
+        }
+        #map-controls {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            max-width: calc(100vw - 40px);
+            gap: 8px;
+            z-index: 12;
+        }
+        .map-button {
+            padding: 9px 14px;
+            border: 1px solid rgba(148, 163, 184, 0.4);
+            border-radius: 8px;
+            background: rgba(15, 23, 42, 0.88);
+            color: #cbd5e1;
+            font: inherit;
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+        }
+        .map-button:hover:not(:disabled) {
+            border-color: #38bdf8;
+            color: #fff;
+        }
+        .map-button[aria-pressed="true"] {
+            border-color: #38bdf8;
+            background: rgba(14, 116, 144, 0.8);
+            color: #fff;
+        }
+        .map-button:disabled {
+            cursor: wait;
+            opacity: 0.55;
+        }
+        #map-status {
+            position: absolute;
+            top: 68px;
+            right: 20px;
+            z-index: 10;
+            max-width: 290px;
+            color: #94a3b8;
+            font-size: 0.7rem;
+            text-align: right;
+            text-shadow: 0 1px 4px rgba(0,0,0,0.9);
+        }
+        #map-status a {
+            color: #7dd3fc;
+        }
+        #map-scale {
+            position: fixed;
+            left: 20px;
+            bottom: 20px;
+            z-index: 12;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 5px;
+            color: #e2e8f0;
+            font-size: 0.75rem;
+            text-shadow: 0 1px 5px rgba(0, 0, 0, 0.95);
+            pointer-events: none;
+        }
+        #map-scale[hidden] {
+            display: none;
+        }
+        #map-scale-line {
+            width: 100px;
+            height: 8px;
+            box-sizing: border-box;
+            border-right: 2px solid currentColor;
+            border-bottom: 2px solid currentColor;
+            border-left: 2px solid currentColor;
+        }
+
+        #site-accessible-controls {
+            position: fixed;
+            top: 12px;
+            left: 12px;
+            z-index: 21;
+            width: 1px;
+            height: 1px;
+            overflow: hidden;
+            clip-path: inset(50%);
+            white-space: nowrap;
+        }
+        #site-accessible-controls:focus-within {
+            width: min(300px, calc(100vw - 24px));
+            height: min(48vh, 400px);
+            overflow: auto;
+            clip-path: none;
+            padding: 12px;
+            border: 1px solid rgba(56, 189, 248, 0.35);
+            border-radius: 12px;
+            background: rgba(15, 23, 42, 0.98);
+            white-space: normal;
+        }
+        #details-drawer {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            z-index: 19;
+            display: flex;
+            flex-direction: column;
+            width: min(1440px, calc(100vw - 48px));
+            height: auto;
+            max-height: min(88vh, 900px);
+            box-sizing: border-box;
+            padding: 20px;
+            overflow-y: auto;
+            border: 1px solid rgba(56, 189, 248, 0.35);
+            border-radius: 16px;
+            background: rgba(15, 23, 42, 0.84);
+            box-shadow: 0 10px 36px rgba(0, 0, 0, 0.5);
+            transform: translate(-50%, calc(100% + 28px));
+            transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
+        }
+        #details-drawer.is-open {
+            transform: translate(-50%, 0);
+        }
+        .drawer-header {
+            position: sticky;
+            top: -20px;
+            z-index: 2;
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 4px 0 8px;
+            background: rgba(15, 23, 42, 0.96);
+        }
+        .drawer-kicker {
+            margin: 0;
+            color: #38bdf8;
+            font-size: 0.65rem;
+            font-weight: 700;
+            letter-spacing: 0.16em;
+        }
+        .drawer-header h2 {
+            margin: 3px 0 12px;
+            color: #fff;
+            font-size: clamp(1.3rem, 2vw, 1.8rem);
+        }
+        .drawer-body {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(210px, 0.3fr);
+            align-items: start;
+            gap: 16px;
+        }
+        .drawer-main {
+            display: grid;
+            grid-template-columns: minmax(250px, 0.85fr) minmax(0, 1.15fr);
+            align-items: start;
+            gap: 16px;
+        }
+        .drawer-body.no-image .drawer-main {
+            grid-template-columns: minmax(0, 1fr);
+        }
+        .drawer-copy {
+            display: grid;
+            gap: 10px;
+            min-width: 0;
+        }
+        .drawer-close,
+        .carousel-control {
+            border: 1px solid rgba(148, 163, 184, 0.4);
+            border-radius: 8px;
+            background: rgba(15, 23, 42, 0.9);
+            color: #e2e8f0;
+            font: inherit;
+            cursor: pointer;
+        }
+        .drawer-close {
+            flex: 0 0 auto;
+            padding: 7px 11px;
+        }
+        .drawer-header-actions {
+            display: flex;
+            flex: 0 0 auto;
+            align-items: center;
+            gap: 8px;
+        }
+        .speech-button {
+            flex: 0 0 auto;
+            padding: 4px 8px;
+            border: 1px solid rgba(125, 211, 252, 0.35);
+            border-radius: 7px;
+            background: rgba(8, 47, 73, 0.55);
+            color: #bae6fd;
+            font: inherit;
+            font-size: 0.68rem;
+            font-weight: 600;
+            line-height: 1.2;
+            text-transform: none;
+            cursor: pointer;
+        }
+        .speech-button:hover,
+        .speech-button:focus-visible {
+            border-color: #7dd3fc;
+            background: rgba(8, 47, 73, 0.9);
+            color: #fff;
+        }
+        #speech-stop {
+            border-color: rgba(248, 113, 113, 0.5);
+            background: rgba(127, 29, 29, 0.55);
+            color: #fecaca;
+        }
+        .drawer-close:hover,
+        .carousel-control:hover {
+            border-color: #38bdf8;
+            color: #fff;
+        }
+        .drawer-image {
+            position: sticky;
+            top: 76px;
+            margin: 0;
+        }
+        .drawer-image[hidden] {
+            display: none;
+        }
+        .drawer-image img {
+            display: block;
+            width: 100%;
+            max-height: min(52vh, 470px);
+            object-fit: contain;
+            border-radius: 10px;
+            background: #020617;
+        }
+        .drawer-image figcaption {
+            margin-top: 6px;
+            color: #94a3b8;
+            font-size: 0.7rem;
+        }
+        .drawer-status {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            margin: 0;
+            padding: 9px 11px;
+            border: 1px solid rgba(125, 211, 252, 0.24);
+            border-left: 3px solid #38bdf8;
+            border-radius: 8px;
+            background: rgba(8, 47, 73, 0.4);
+            color: #7dd3fc;
+            font-size: 0.82rem;
+            font-weight: 600;
+            line-height: 1.45;
+        }
+        .drawer-section {
+            padding: 11px 12px;
+            border: 1px solid rgba(148, 163, 184, 0.17);
+            border-radius: 10px;
+            background: rgba(2, 6, 23, 0.43);
+        }
+        .drawer-section h3,
+        .drawer-sidebar h3 {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            margin: 0 0 6px;
+            color: #f8fafc;
+            font-size: 0.78rem;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+        .drawer-section p {
+            margin: 0;
+            color: #cbd5e1;
+            font-size: 0.84rem;
+            line-height: 1.55;
+        }
+        .drawer-chapter + .drawer-chapter {
+            margin-top: 14px;
+            padding-top: 12px;
+            border-top: 1px solid rgba(148, 163, 184, 0.17);
+        }
+        .drawer-chapter h4 {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            margin: 0 0 5px;
+            color: #7dd3fc;
+            font-size: 0.82rem;
+        }
+        .drawer-section .drawer-chapter p {
+            font-size: 0.84rem;
+            line-height: 1.68;
+        }
+        .instrument-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            list-style: none;
+            margin: 0;
+            padding: 0;
+        }
+        .instrument-list li {
+            padding: 5px 8px;
+            border: 1px solid rgba(56, 189, 248, 0.2);
+            border-radius: 7px;
+            background: rgba(15, 23, 42, 0.8);
+            color: #cbd5e1;
+            font-size: 0.75rem;
+            line-height: 1.4;
+        }
+        .drawer-sidebar {
+            display: grid;
+            align-content: start;
+            gap: 9px;
+            padding: 12px;
+            border: 1px solid rgba(251, 191, 36, 0.23);
+            border-radius: 12px;
+            background: linear-gradient(155deg, rgba(120, 53, 15, 0.18), rgba(15, 23, 42, 0.72));
+        }
+        .drawer-sidebar h3 {
+            color: #fcd34d;
+        }
+        .trivia-card {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 9px 10px;
+            border-left: 2px solid rgba(251, 191, 36, 0.75);
+            border-radius: 0 8px 8px 0;
+            background: rgba(2, 6, 23, 0.48);
+            color: #e2e8f0;
+            font-size: 0.78rem;
+            line-height: 1.5;
+        }
+        .drawer-links {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px 14px;
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid rgba(148, 163, 184, 0.25);
+        }
+        .drawer-links a {
+            color: #7dd3fc;
+            font-size: 0.85rem;
+        }
+        .legend-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            gap: 10px;
+            min-height: 0;
+            overflow-y: auto;
+        }
+        .legend-item {
+            display: flex;
+            align-items: flex-start;
+            width: 100%;
+            gap: 10px;
+            font-size: 0.8rem;
+            color: #e5e7eb;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            padding: 4px 6px;
+            border: 0;
+            border-radius: 6px;
+            background: transparent;
+            font: inherit;
+            text-align: left;
+        }
+        .legend-item:hover {
+            background: rgba(56, 189, 248, 0.15);
+        }
+        .legend-item.is-selected {
+            background: rgba(14, 116, 144, 0.55);
+        }
+        .dot-indicator {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background-color: #f97316;
+            box-shadow: 0 0 8px #f97316;
+            margin-top: 3px;
+            flex-shrink: 0;
+        }
+        .site-title {
+            font-weight: 600;
+            color: #ffffff;
+            display: block;
+        }
+        #deep-space-view {
+            position: fixed;
+            inset: 0;
+            z-index: 9;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            padding: 72px 16px 64px;
+        }
+        #deep-space-view[hidden] {
+            display: none;
+        }
+        .visually-hidden {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
+        .space-carousel {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: clamp(12px, 4vw, 48px);
+            width: min(1100px, 96vw);
+        }
+        .carousel-control {
+            display: grid;
+            place-items: center;
+            flex: 0 0 auto;
+            width: 48px;
+            height: 48px;
+            padding: 0;
+            border-color: rgba(148, 163, 184, 0.38);
+            background: rgba(15, 23, 42, 0.72);
+            font-size: 1.7rem;
+            line-height: 1;
+        }
+        .carousel-control:disabled {
+            border-color: rgba(148, 163, 184, 0.18);
+            color: rgba(226, 232, 240, 0.3);
+            cursor: not-allowed;
+        }
+        .craft-feature {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-width: 0;
+            padding: 0;
+            border: 0;
+            border-radius: 0;
+            background: transparent;
+            cursor: pointer;
+            transition: transform 0.3s ease;
+        }
+        .craft-feature:hover {
+            transform: scale(1.05);
+        }
+        .craft-feature img {
+            display: block;
+            width: min(70vw, 820px);
+            height: min(58vh, 520px);
+            object-fit: contain;
+            opacity: 0.78;
+            mix-blend-mode: screen;
+            filter: brightness(1.6) contrast(1.15);
+            transition: opacity 0.3s ease;
+        }
+        .craft-name {
+            margin-top: 8px;
+            color: #e0f2fe;
+            font-size: 1rem;
+            font-weight: 600;
+            letter-spacing: 0.04em;
+            line-height: 1.3;
+            text-align: center;
+            text-shadow: 0 2px 8px rgba(0, 0, 0, 0.9);
+        }
+        .craft-feature:hover img,
+        .craft-feature:focus-visible img {
+            opacity: 1;
+        }
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                scroll-behavior: auto !important;
+                animation-duration: 0.01ms !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
+        .carousel-footer {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: absolute;
+            bottom: 18px;
+            color: #94a3b8;
+            font-size: 0.8rem;
+        }
+
+        /* Hover Tooltip */
+        #tooltip {
+            position: absolute;
+            display: none;
+            background: rgba(3, 7, 18, 0.9);
+            border: 1px solid #f97316;
+            color: #fff;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            pointer-events: none;
+            z-index: 20;
+            box-shadow: 0 4px 14px rgba(249, 115, 22, 0.3);
+            transform: translate(-50%, -120%);
+        }
+        @media (max-width: 700px) {
+            #header-overlay {
+                top: 14px;
+                left: 14px;
+                right: 14px;
+            }
+            h1 {
+                font-size: 1.1rem;
+            }
+            p.subtitle {
+                max-width: 270px;
+                font-size: 0.75rem;
+            }
+            #map-controls {
+                top: 92px;
+                right: auto;
+                left: 14px;
+                max-width: calc(100vw - 28px);
+            }
+            #map-status {
+                top: 136px;
+                right: auto;
+                left: 14px;
+                text-align: left;
+            }
+            #map-scale {
+                left: 14px;
+                bottom: 14px;
+            }
+            #deep-space-view {
+                padding: 100px 8px 64px;
+            }
+            .space-carousel {
+                gap: 8px;
+                width: 100%;
+            }
+            .carousel-control {
+                width: 40px;
+                height: 40px;
+                font-size: 1.4rem;
+            }
+            .craft-feature img {
+                width: calc(100vw - 112px);
+                height: min(48vh, 380px);
+            }
+            .craft-name {
+                font-size: 0.9rem;
+            }
+            #details-drawer {
+                bottom: 12px;
+                width: calc(100vw - 24px);
+                height: 84vh;
+                max-height: 86vh;
+                padding: 16px;
+            }
+            .drawer-body,
+            .drawer-main {
+                grid-template-columns: minmax(0, 1fr);
+            }
+            .drawer-image {
+                position: static;
+            }
+            .drawer-image img {
+                max-height: 28vh;
+            }
+            .drawer-sidebar {
+                grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="header-overlay">
+        <h1 id="page-title">NASA Mission Hardware Trail</h1>
+        <p class="subtitle" id="page-subtitle">The globe rotates to reveal mission locations. Select a marker to explore its hardware, science, image, and NASA links.</p>
+    </div>
+
+    <div id="map-controls" role="group" aria-label="Choose a destination">
+        <button class="map-button" id="earth-button" type="button" aria-pressed="true">Earth</button>
+        <button class="map-button" id="moon-button" type="button" aria-pressed="false" disabled>Loading Moon...</button>
+        <button class="map-button" id="mars-button" type="button" aria-pressed="false" disabled>Loading Mars...</button>
+        <button class="map-button" id="deep-space-button" type="button" aria-pressed="false">Deep Space</button>
+    </div>
+    <div id="map-status" role="status" aria-live="polite">Loading planetary maps...</div>
+    <div id="map-scale" aria-label="Approximate map scale" hidden>
+        <span id="map-scale-label"></span>
+        <span id="map-scale-line"></span>
+    </div>
+
+    <nav id="site-accessible-controls" aria-label="Accessible mission point selection">
+        <ul class="legend-list" id="legend-list"></ul>
+    </nav>
+
+    <aside id="details-drawer" role="dialog" aria-modal="false" aria-labelledby="detail-title" aria-hidden="true" inert>
+        <div class="drawer-header">
+            <div>
+                <p class="drawer-kicker" id="detail-kicker">MISSION FIELD GUIDE</p>
+                <h2 id="detail-title"></h2>
+            </div>
+            <div class="drawer-header-actions">
+                <button class="speech-button" id="speech-stop" type="button" hidden>Stop audio</button>
+                <button class="drawer-close" id="detail-close" type="button" aria-label="Close mission details">Close</button>
+            </div>
+        </div>
+        <div class="drawer-body" id="detail-body">
+            <div class="drawer-main">
+                <figure class="drawer-image" id="detail-figure" hidden>
+                    <img id="detail-image" alt="">
+                    <figcaption><span id="detail-image-credit"></span></figcaption>
+                </figure>
+                <div class="drawer-copy">
+                    <p class="drawer-status" id="detail-status"><span id="detail-status-text"></span></p>
+                    <section class="drawer-section">
+                        <h3><span id="detail-objective-heading">Mission objective</span></h3>
+                        <p id="detail-objective"></p>
+                    </section>
+                    <section class="drawer-section">
+                        <h3 id="detail-instruments-heading">Instruments &amp; hardware</h3>
+                        <ul class="instrument-list" id="detail-instruments"></ul>
+                    </section>
+                    <section class="drawer-section">
+                        <h3 id="detail-story-heading">What scientists learned</h3>
+                        <p id="detail-story"></p>
+                    </section>
+                    <section class="drawer-section">
+                        <h3 id="detail-chapters-heading">The longer story</h3>
+                        <div id="detail-chapters"></div>
+                    </section>
+                </div>
+            </div>
+            <aside class="drawer-sidebar" id="detail-trivia" aria-label="Mission trivia"></aside>
+        </div>
+        <div class="drawer-links" id="detail-links"></div>
+        <span id="speech-status" class="visually-hidden" aria-live="polite"></span>
+    </aside>
+
+    <section id="deep-space-view" aria-labelledby="deep-space-heading" hidden>
+        <h2 id="deep-space-heading" class="visually-hidden">Choose a spacecraft beyond the planets</h2>
+        <div class="space-carousel" aria-label="Deep-space spacecraft carousel">
+            <button class="carousel-control" id="previous-spacecraft" type="button" aria-label="Previous spacecraft">&larr;</button>
+            <button class="craft-feature" id="craft-select" type="button" aria-label="Open spacecraft details">
+                <img id="craft-image" alt="">
+                <span class="craft-name" id="craft-name" aria-hidden="true"></span>
+            </button>
+            <button class="carousel-control" id="next-spacecraft" type="button" aria-label="Next spacecraft">&rarr;</button>
+        </div>
+        <div class="carousel-footer">
+            <span id="craft-count" aria-live="polite"></span>
+        </div>
+    </section>
+
+    <div id="tooltip"></div>
+
+    <!-- Libraries via unpkg CDN -->
+    <script src="https://unpkg.com/three@0.134.0/build/three.min.js"></script>
+    <script src="https://unpkg.com/three@0.134.0/examples/js/controls/OrbitControls.js"></script>
+
+    <script>
+        // Data for Major NASA Residue & Operational Impact Sites
+        const earthSites = [
+            {
+                id: 'point-nemo',
+                name: "Point Nemo Spacecraft Cemetery",
+                lat: -48.87,
+                lon: -123.39,
+                desc: "A remote South Pacific region used for controlled reentries of large retired spacecraft.",
+                status: "No single lander is here; reentry debris sinks into the ocean.",
+                objective: "This is not a landing site. It shows where mission planners aim controlled reentries of large spacecraft so surviving debris is more likely to fall in a remote ocean region.",
+                instruments: ["No surface hardware or mission instruments", "Spacecraft tracking and orbital models guide reentry planning"],
+                science: "Point Nemo is the ocean location farthest from land. Remote ocean reentry zones help keep debris from large retired spacecraft away from populated areas. This marker represents an end-of-mission practice, not hardware visible on the surface.",
+                chapters: [
+                    { heading: "Why spacecraft come back", text: "Satellites and stations in low Earth orbit gradually lose altitude as they brush the extremely thin upper atmosphere. Operators can use a planned engine burn to choose when and where a large vehicle reenters. Planning matters because heat does not vaporize every dense component: tanks, wheels, and other sturdy parts can survive the trip down." },
+                    { heading: "A controlled ocean return", text: "A remote ocean corridor gives mission teams a wide safety margin from towns and shipping lanes. They predict the vehicle's path, time the deorbit maneuver, and track the breakup as it descends. Point Nemo is a useful geographic reference, but not every spacecraft disposal follows the exact same track or leaves a neat pile at one coordinate." },
+                    { heading: "What is—and is not—left here", text: "There is no NASA lander or instrument to visit at this marker. Most debris sinks, and the seafloor is far below the reach of ordinary recovery operations. The story is about responsible mission design: the end of a spacecraft's useful life is planned just as carefully as launch, so its final orbit does not become a hazard for future missions." },
+                    { heading: "Predicting a safe corridor", text: "Reentry forecasts include uncertainties in atmospheric density, spacecraft attitude, and how the vehicle breaks apart. Engineers model a corridor rather than a single pinpoint and choose a time that keeps the likely debris footprint away from populated land. Tracking data refine the prediction during the final orbits, but the atmosphere is variable, so safety planning must account for a range of possible outcomes." },
+                    { heading: "Stewardship after the mission", text: "Controlled disposal is one part of the wider effort to manage orbital debris. Operators also passivate spacecraft by venting leftover fuel or discharging batteries where appropriate, reducing the chance of an accidental explosion in orbit. A clean ending cannot undo every environmental impact, but it lowers risk for future spacecraft and makes the mission's final chapter an intentional engineering decision." }
+                ],
+                trivia: [
+                    "Point Nemo is about 2,688 km from the nearest land. The nearest humans may be astronauts aboard the ISS.",
+                    "It is a watery spacecraft cemetery: a controlled disposal target, not a pile of wreckage you can visit."
+                ],
+                image: "https://cdn.oceanservice.noaa.gov/oceanserviceprod/facts/nemo.jpg",
+                imageAlt: "Map illustrating Point Nemo, the part of the ocean farthest from land",
+                imageCredit: "NOAA",
+                links: [
+                    { label: 'NOAA: What is Point Nemo?', url: 'https://oceanservice.noaa.gov/facts/nemo.html' },
+                    { label: 'NASA: Orbital debris FAQ', url: 'https://orbitaldebris.jsc.nasa.gov/faq/' }
+                ]
+            },
+            {
+                id: 'skylab',
+                name: "Skylab Re-entry (Esperance)",
+                lat: -33.86,
+                lon: 121.89,
+                desc: "The western Australia region where debris from Skylab's 1979 reentry was found.",
+                status: "Reentered Earth's atmosphere on July 11, 1979; debris fell across Western Australia.",
+                objective: "Skylab tested whether people could live and work in orbit for weeks at a time, while observing the Sun, Earth, and how the human body adapts to microgravity.",
+                instruments: ["Apollo Telescope Mount solar telescopes", "Earth Resources Experiment Package cameras and scanners", "Crew medical and microgravity experiments"],
+                science: "America's first space station hosted three crews and supported solar observations, Earth studies, and experiments on living in microgravity. Its reentry is a reminder that retired hardware eventually returns to Earth.",
+                chapters: [
+                    { heading: "A workshop in orbit", text: "Skylab was assembled from a modified Saturn V upper stage and launched in 1973. Its pressurized workshop gave crews room to sleep, exercise, eat, and run experiments for weeks at a time. Three crews visited the station. They repaired launch damage, learned how to work efficiently in weightlessness, and showed that a large orbital laboratory could support sustained human activity." },
+                    { heading: "Looking outward and back", text: "The Apollo Telescope Mount carried several solar telescopes that observed the Sun in visible, ultraviolet, and X-ray wavelengths. The Earth Resources Experiment Package used cameras and scanners to survey land, water, crops, and geology from orbit. Together with medical and materials experiments, these instruments let researchers compare solar activity, Earth's changing surface, and the effects of microgravity." },
+                    { heading: "A dramatic beginning and an unplanned ending", text: "During launch, Skylab's micrometeoroid shield tore away and one solar array was damaged. The first crew improvised a sunshade and freed the array, turning a near-loss into a major repair demonstration. After the final crew departed, solar activity expanded the upper atmosphere more than forecast, increasing drag. Skylab reentered in 1979; debris reached Western Australia, making the station's retirement part of its public legacy." },
+                    { heading: "Observing the Sun in a new way", text: "The Apollo Telescope Mount watched solar activity across wavelengths that are absorbed or distorted by Earth's atmosphere. Its observations helped researchers track flares, coronal structures, and changes across the solar disk. Skylab's human observers could also recognize unexpected features and adjust observations, an advantage of having trained scientists in orbit with instruments that could be pointed and checked directly." },
+                    { heading: "A bridge to later stations", text: "Skylab's crews learned how exercise, nutrition, work schedules, and equipment design affect people during long stays in weightlessness. The station also showed that damaged hardware could sometimes be repaired by a prepared crew using improvised tools. Those lessons influenced later space-station planning, including maintenance access, spare parts, crew routines, and the value of designing systems for on-orbit repair." }
+                ],
+                trivia: [
+                    "Skylab was built from an upper stage of a Saturn V rocket and was large enough for crews to exercise inside.",
+                    "A micrometeoroid shield tore loose during launch; the first crew made an emergency repair in orbit."
+                ],
+                image: "https://images-assets.nasa.gov/image/sl3-114-1682/sl3-114-1682~large.jpg",
+                imageAlt: "Skylab space station photographed in orbit against a dark background",
+                imageCredit: "NASA",
+                links: [
+                    { label: 'NASA: Skylab', url: 'https://www.nasa.gov/skylab/' },
+                    { label: 'NASA Image Library: Skylab in orbit', url: 'https://images.nasa.gov/details/sl3-114-1682' }
+                ]
+            },
+            {
+                id: 'ksc',
+                name: "Kennedy Space Center",
+                lat: 28.57,
+                lon: -80.64,
+                desc: "Florida launch center for Apollo, Space Shuttle, and current exploration missions.",
+                status: "Active NASA launch center.",
+                objective: "Launch centers turn spacecraft and rocket designs into working missions: assemble, test, fuel, and send vehicles toward orbit, the Moon, or beyond.",
+                instruments: ["Saturn V launch vehicle and Apollo launch facilities", "Mobile launch platforms and crawler-transporter", "Modern launch pads and spacecraft processing facilities"],
+                science: "Saturn V rockets launched the Apollo crews and lunar equipment from Kennedy. Their journeys enabled Moon experiments and left landers, rovers, and instruments behind.",
+                chapters: [
+                    { heading: "From assembly building to launch pad", text: "Kennedy Space Center is where launch vehicles and spacecraft are prepared as integrated systems. Teams stack stages, test avionics, load propellant, verify safety rules, and move the rocket to its pad. During Apollo, the Vehicle Assembly Building and crawler-transporter made it possible to assemble the 111-meter Saturn V indoors and carry it to the launch complex." },
+                    { heading: "A launch site enables distant science", text: "A launch facility does not usually perform the mission's planetary measurements itself. Its contribution is to deliver the spacecraft onto a carefully chosen trajectory with enough energy, accuracy, and reliability to reach the destination. Apollo launches sent astronauts, lunar modules, rovers, cameras, and experiment packages to the Moon; those payloads produced the hardware and science represented by the other pins in this explorer." },
+                    { heading: "The work continues", text: "Kennedy has supported human spaceflight, robotic planetary missions, and commercial launch operations across several generations of vehicles. The launch pads and processing areas change as spacecraft change, but the basic challenge remains: thousands of parts and teams must be ready at the same time. A successful launch is the opening chapter of a mission, not the result scientists are trying to measure." },
+                    { heading: "The countdown is a systems test", text: "A launch countdown is a carefully sequenced verification process. Teams check power, guidance, communications, propulsion, weather, range safety, and the health of the spacecraft. If a reading falls outside its limits, the clock can stop while engineers investigate. This disciplined pause is a feature, not a failure: it gives people time to understand a condition before committing a multi-billion-dollar vehicle and crew to flight." },
+                    { heading: "The trajectory is part of the mission design", text: "Launch windows depend on where Earth and the destination are, how long the spacecraft will travel, and how much energy the rocket can provide. A small change in launch time can alter arrival geometry, communications opportunities, and fuel needs years later. Kennedy's work therefore links ground operations to planetary science: the launch team must deliver the spacecraft into the precise starting conditions that make its instruments useful at the far end." }
+                ],
+                trivia: [
+                    "The Saturn V stood about 111 m tall—roughly as high as a 36-story building.",
+                    "A rocket launch is not just a ride: its precise trajectory determines where a spacecraft can go and how much fuel it needs."
+                ],
+                image: "https://images-assets.nasa.gov/image/6864722/6864722~large.jpg",
+                imageAlt: "Saturn V rocket launching Apollo 6 from Kennedy Space Center",
+                imageCredit: "NASA",
+                links: [
+                    { label: 'NASA: Kennedy Space Center', url: 'https://www.nasa.gov/kennedy/' },
+                    { label: 'NASA Image Library: Saturn V launch', url: 'https://images.nasa.gov/details/6864722' }
+                ]
+            },
+            {
+                id: 'jsc',
+                name: "Johnson Space Center",
+                lat: 29.55,
+                lon: -95.09,
+                desc: "Houston center for astronaut training, Mission Control, and human spaceflight.",
+                status: "Active NASA center; Mission Control supports crews in space.",
+                objective: "Johnson trains astronauts, plans crewed missions, and operates Mission Control so crews and spacecraft can work safely in orbit and on future exploration missions.",
+                instruments: ["Mission Control flight-control consoles and communications systems", "Spacecraft mockups and astronaut training simulators", "Apollo Lunar Sample Laboratory for curation and analysis"],
+                science: "Flight controllers in Houston help operate spacecraft and guide astronauts as they collect data and run experiments. Johnson also houses the Apollo Lunar Sample Laboratory, where Moon rocks are studied and preserved.",
+                chapters: [
+                    { heading: "A mission's ground-based partner", text: "Johnson Space Center trains crews and plans human missions, while Mission Control monitors spacecraft systems and coordinates decisions with astronauts. Flight controllers follow power, life support, guidance, communications, and payload operations. They use procedures, simulations, and multiple specialist teams to understand a problem before recommending an action to a crew hundreds of kilometers overhead." },
+                    { heading: "Training before flight", text: "Astronauts rehearse tasks in spacecraft mockups, underwater facilities, and computer simulations. The practice is deliberately repetitive: a crew must be able to respond when a display fails, a timeline slips, or an unexpected condition appears. Mission Control teams train alongside them so ground and flight crews share the same procedures, terminology, and backup plans." },
+                    { heading: "Preserving evidence from the Moon", text: "Johnson also curates Apollo lunar samples in a controlled laboratory. The rocks and soil are cataloged, protected from contamination, and made available to researchers. New analytical tools can extract answers from tiny samples, so careful storage preserves options for future science. The center therefore supports both live missions and long-term investigations of hardware and material brought home decades ago." },
+                    { heading: "People, procedures, and real-time science", text: "Mission Control is a network of specialists rather than a single room of people watching screens. Flight directors coordinate engineering, medical, navigation, payload, and communications teams. During science operations, controllers balance crew safety and spacecraft constraints with the value of an observation. They help astronauts adjust plans when the real environment differs from a simulation, while recording decisions so later researchers can reconstruct what happened." },
+                    { heading: "From Apollo to future exploration", text: "The center's role has evolved from lunar flights through the Space Shuttle and International Space Station to new exploration programs. Each era adds different vehicles, software, and operational challenges, but the need for practiced crews and ground teams remains. Training simulators and archived mission data let new teams learn from earlier flights, turning the experience of past missions into a practical resource for future ones." }
+                ],
+                trivia: [
+                    "When controllers say “the flight director has go,” it means teams across many specialties have checked their systems and are ready.",
+                    "Apollo lunar samples are stored in carefully controlled conditions so future researchers can study them with instruments not yet invented."
+                ],
+                image: "https://images-assets.nasa.gov/image/jsc2026e019217/jsc2026e019217~large.jpg",
+                imageAlt: "Artemis II flight director and mission controllers working in Mission Control at Johnson Space Center",
+                imageCredit: "NASA",
+                links: [
+                    { label: 'NASA: Johnson Space Center', url: 'https://www.nasa.gov/johnson/' },
+                    { label: 'NASA Image Library: Mission Control', url: 'https://images.nasa.gov/details/jsc2026e019217' }
+                ]
+            },
+            {
+                id: 'white-sands',
+                name: "White Sands Space Harbor",
+                lat: 32.94,
+                lon: -106.42,
+                desc: "New Mexico landing and training site for NASA's Space Shuttle program.",
+                status: "Space Shuttle Columbia landed here on STS-3 in 1982; the site also supported astronaut landing practice.",
+                objective: "White Sands gave Shuttle crews a backup landing area and a place to practice the orbiter's steep, unpowered approach before returning from space.",
+                instruments: ["Space Shuttle Training Aircraft cockpit and flight controls", "Long runway and landing aids", "Shuttle orbiter Columbia on the STS-3 landing"],
+                science: "Shuttle Training Aircraft let astronaut pilots rehearse the steep approach and runway landing needed to bring the orbiter home. STS-3 showed that a shuttle could also land at White Sands.",
+                chapters: [
+                    { heading: "Practicing a difficult landing", text: "The Space Shuttle returned to Earth as an unpowered glider. Crews had one steep, fast approach and could not circle the runway for another attempt. The Shuttle Training Aircraft reproduced the orbiter's high sink rate and handling close to the ground, allowing commander and pilot to rehearse the visual cues, energy management, and precise flare required for landing." },
+                    { heading: "A backup runway in the desert", text: "White Sands Space Harbor offered broad runways and dry lakebed surfaces in an area with relatively clear weather. Columbia landed here on March 30, 1982, at the end of STS-3. The landing demonstrated that the Shuttle could use an alternate site when weather or other constraints made the primary runway unavailable." },
+                    { heading: "A place for rehearsal, not a spacecraft cemetery", text: "The orange training aircraft and the landing facilities were operational tools, not planetary science instruments. Their importance lies in reducing risk: astronauts practiced in a familiar aircraft before facing the real orbiter, while ground teams learned how to prepare an alternate runway. This pin represents the human and logistical work that made a reusable spacecraft's return possible." },
+                    { heading: "Learning to manage energy", text: "In a Shuttle Training Aircraft, pilots practiced arriving high and fast, then losing altitude and speed rapidly on a steep glide path. They had to judge the runway, flare at the right moment, and touch down within a limited distance. The exercise taught crews to recognize energy-state errors early, because a real orbiter could not add thrust to rescue a poor approach." },
+                    { heading: "A small site in a large program", text: "Alternate landing sites required their own runway surveys, weather monitoring, emergency teams, and recovery equipment. White Sands was one piece of a worldwide return-to-flight plan, not simply an open patch of desert. The preparation demonstrates how mission reliability depends on backup infrastructure: a spacecraft can be designed for reuse only if people on the ground are ready to receive it safely." }
+                ],
+                trivia: [
+                    "A Space Shuttle landed like a glider: once it committed to the final approach, it could not circle around for another try.",
+                    "The desert's wide, dry lakebeds made the area useful for astronaut landing practice."
+                ],
+                image: "https://images-assets.nasa.gov/image/jsc2010e054299/jsc2010e054299~large.jpg",
+                imageAlt: "Space Shuttle Training Aircraft flying over White Sands Space Harbor",
+                imageCredit: "NASA/JSC",
+                links: [
+                    { label: 'NASA Image Library: White Sands training flight', url: 'https://images.nasa.gov/details/jsc2010e054299' },
+                    { label: 'NASA: Johnson Space Center', url: 'https://www.nasa.gov/johnson/' }
+                ]
+            }
+        ];
+
+        const moonSites = [
+            {
+                id: 'apollo-11',
+                name: "Apollo 11",
+                lat: 0.67416,
+                lon: 23.47314,
+                desc: "Mare Tranquillitatis. First crewed Moon landing, July 20, 1969.",
+                status: "Mission complete; lunar hardware remains at the landing site.",
+                objective: "Land safely, demonstrate that people could work on the lunar surface, collect samples, and deploy early experiments to measure seismic activity and the Moon's distance from Earth.",
+                instruments: ["Passive Seismic Experiment", "Laser Ranging Retroreflector", "Apollo Lunar Surface Camera and sample tools"],
+                science: "Armstrong and Aldrin deployed a seismometer, took photographs, and collected lunar rocks and soil. The descent stage of Eagle was left behind when they lifted off.",
+                chapters: [
+                    { heading: "The first landing", text: "Apollo 11 was the culmination of a national effort to land people on the Moon and return them safely. After a Saturn V launch and a three-day journey, the Lunar Module Eagle separated from Columbia. Neil Armstrong and Buzz Aldrin guided it to Mare Tranquillitatis on July 20, 1969. The crew had only a short surface stay, so every movement—from checking the lander to collecting samples—had to fit a tightly planned timeline." },
+                    { heading: "A first scientific station", text: "The astronauts deployed the Early Apollo Scientific Experiments Package. Its Passive Seismic Experiment measured moonquakes and vibrations, while the Laser Ranging Retroreflector provided a target for precise Earth-based laser measurements of the Earth–Moon distance. They also photographed the terrain, documented the landing site, and collected soil and rocks. These were not just souvenirs: sample context and location helped scientists interpret the Moon's history." },
+                    { heading: "What remained and what changed", text: "Eagle's descent stage, experiment packages, tools, and footprints stayed where the crew left them. The samples returned to Earth became a reference collection for lunar geology. Apollo 11 established that people could work on another world, but its science also raised new questions about impacts, volcanism, and the Moon's interior that later Apollo missions investigated with longer traverses and larger instrument packages." },
+                    { heading: "A landing measured in minutes", text: "The descent required Armstrong to take manual control when the computer's warnings and the approach toward a boulder-strewn area demanded a new target. The crew had little fuel margin, so the landing depended on quick decisions, clear communication, and a practiced abort plan. This human-machine partnership became a lasting lesson in how exploration vehicles should support crews under pressure." },
+                    { heading: "Samples that keep answering questions", text: "Apollo 11 returned about 21.6 kilograms of lunar material, including basalts and breccias. Researchers have repeatedly reexamined these samples with improved methods, refining estimates of lunar formation and the timing of impacts. Their value grows because the collection is carefully documented and curated: future scientists can ask questions that were impossible when the samples first arrived." }
+                ],
+                trivia: [
+                    "The Apollo 11 seismometer ran for 21 days; its measurements helped show that the Moon has moonquakes.",
+                    "The small laser reflector left behind can still send light back toward Earth when researchers aim a laser at it."
+                ],
+                source: "https://www.nasa.gov/mission/apollo-11/",
+                image: "https://www.nasa.gov/wp-content/uploads/2019/07/edu_srch_celebrate_the_50th_anniversary_apollo11.jpg?w=1024",
+                imageAlt: "Buzz Aldrin standing on the Moon during Apollo 11",
+                imageCredit: "NASA"
+            },
+            {
+                id: 'apollo-12',
+                name: "Apollo 12",
+                lat: -3.01239,
+                lon: -23.42157,
+                desc: "Oceanus Procellarum. Second crewed lunar landing, November 1969.",
+                status: "Mission complete; lunar hardware remains at the landing site.",
+                objective: "Make a precision landing near Surveyor 3, retrieve parts of the robotic spacecraft, and deploy a more capable long-duration lunar science station.",
+                instruments: ["ALSEP: seismometer, magnetometer, solar-wind spectrometer, and other experiments", "Surveyor 3 camera and components returned to Earth", "Lunar Surface Color Camera and sample tools"],
+                science: "Apollo 12 landed near the Surveyor 3 spacecraft, letting astronauts inspect and bring pieces of an earlier robotic visitor home.",
+                chapters: [
+                    { heading: "A precision landing", text: "Apollo 12 aimed for Oceanus Procellarum and landed close to Surveyor 3, a robotic spacecraft that had touched down two and a half years earlier. The crew walked to Surveyor, photographed its condition, and removed selected parts for examination on Earth. This close-range visit compared the effects of the lunar environment on two generations of spacecraft hardware." },
+                    { heading: "Building a longer-lived lunar observatory", text: "The astronauts deployed the first Apollo Lunar Surface Experiments Package (ALSEP), designed to transmit measurements after the crew had left. Its instruments studied moonquakes, the local magnetic field, solar particles, and the thin lunar environment. The seismometer continued to register vibrations, including the deliberate impact of Apollo 12's ascent stage, giving researchers a way to probe how seismic waves traveled through the Moon." },
+                    { heading: "A mission that expanded the record", text: "Apollo 12 returned basalt samples that helped establish the age and volcanic history of the landing region. By combining photographs, field notes, instrument records, and samples, scientists could connect measurements to specific rocks and terrain. The mission's careful landing also proved that crews could target a site with useful scientific context rather than simply choosing the safest flat area." },
+                    { heading: "A field comparison with Surveyor 3", text: "Surveyor 3 had spent more than two years exposed to vacuum, radiation, temperature extremes, and lunar dust before Apollo 12 arrived. The astronauts photographed the spacecraft and removed its television camera and selected tubing for laboratory inspection. Scientists found terrestrial bacteria on a returned camera component, prompting debate about contamination and survival; it also highlighted how carefully future sample-return missions must control biological contamination." },
+                    { heading: "A long scientific record", text: "The Apollo 12 ALSEP station operated for years, relaying seismic and environmental data after the astronauts departed. Comparing those readings with later Apollo stations helped researchers map how vibrations traveled through the Moon. The mission's combination of a robotic precursor visit, precise human landing, and remotely operated experiments became a powerful template for using multiple missions to build knowledge at one location." }
+                ],
+                trivia: [
+                    "The lander touched down about 535 feet from Surveyor 3—close enough for astronauts to walk over and inspect it.",
+                    "Apollo 12's seismometer recorded vibrations after the ascent stage was deliberately crashed into the Moon."
+                ],
+                source: "https://www.nasa.gov/history/55-years-ago-apollo-12-makes-a-pinpoint-landing-on-the-moon/",
+                image: "https://www.nasa.gov/wp-content/uploads/2018/06/3-as12-47-6919c.jpg?w=1024",
+                imageAlt: "Alan Bean deploying the Apollo 12 lunar surface experiments package",
+                imageCredit: "NASA"
+            },
+            {
+                id: 'apollo-14',
+                name: "Apollo 14",
+                lat: -3.6453,
+                lon: -17.4714,
+                desc: "Fra Mauro Highlands. Third crewed lunar landing, February 1971.",
+                status: "Mission complete; lunar hardware remains at the landing site.",
+                objective: "Explore the Fra Mauro highlands and collect material thrown out by the impact that formed the huge Imbrium basin.",
+                instruments: ["ALSEP seismic experiments and solar-wind measurements", "Lunar Portable Magnetometer", "Hand tools, cameras, and sample containers"],
+                science: "The crew collected rocks from the Fra Mauro highlands, helping scientists investigate the Moon’s ancient impact history.",
+                chapters: [
+                    { heading: "Reading the Imbrium ejecta", text: "Apollo 14 landed in the Fra Mauro Highlands, a region covered by material thrown outward when the enormous Imbrium basin formed. The crew's goal was to collect that ejecta and determine how it recorded the Moon's early bombardment. Working over uneven ground, astronauts traversed to Cone Crater, documented boulders and slopes, and selected samples whose field context could be compared with orbital maps." },
+                    { heading: "Experiments on the surface", text: "The crew deployed an ALSEP station with seismic and solar-wind investigations, and used a portable magnetometer to compare magnetic properties across the site. Cameras and hand tools helped them map, photograph, and collect rocks. Each sample bag was associated with notes about its location and appearance, an essential practice because a rock separated from its context can tell a much less complete story." },
+                    { heading: "The geology changed its mind", text: "The returned material showed that many rocks in the region were impact breccias—fragments fused by ancient collisions—rather than evidence of widespread local volcanism. Apollo 14 therefore refined scientists' understanding of the highlands and the Moon's early impact record. The mission also showed the value of training astronauts in field geology: a good traverse plan could turn a short walk into a carefully documented expedition." },
+                    { heading: "The challenge of reaching Cone Crater", text: "The crew's planned route to Cone Crater crossed sloped, broken terrain, and the crater rim proved difficult to identify from the surface. They collected rocks and photographed the area but did not reach the exact rim. The experience was scientifically useful: it showed how visual scale, lighting, and limited mobility complicate field navigation on another world, even with maps and support from Earth." },
+                    { heading: "From individual rocks to lunar history", text: "Apollo 14 samples were compared with material from other sites to separate local geology from basin-wide impact ejecta. Ages measured in the laboratory helped constrain when large impacts reshaped the Moon. The mission also returned breccias containing fragments of older rocks, effectively preserving a geological archive assembled by ancient collisions." }
+                ],
+                trivia: [
+                    "Commander Alan Shepard hit two golf balls with a makeshift six-iron while wearing his spacesuit.",
+                    "The rugged terrain made the crew's trek to Cone Crater harder than the map had promised."
+                ],
+                source: "https://www.nasa.gov/the-apollo-program/",
+                image: "https://www.nasa.gov/wp-content/uploads/2023/12/first-powered-flight-9-apollo-14-lm-kitty-hawk-on-the-moon-as14-66-9306.jpg?w=986",
+                imageAlt: "Apollo 14 lunar module Kitty Hawk on the Moon",
+                imageCredit: "NASA"
+            },
+            {
+                id: 'apollo-15',
+                name: "Apollo 15",
+                lat: 26.1322,
+                lon: 3.6339,
+                desc: "Hadley–Apennine region. First Apollo mission to use a lunar rover, July 1971.",
+                status: "Mission complete; the lunar rover and other hardware were left on the Moon.",
+                objective: "Explore the Apennine mountains and Hadley Rille to compare ancient highland rocks with younger volcanic terrain, while greatly extending the crew's travel range.",
+                instruments: ["Lunar Roving Vehicle with navigation and communications systems", "ALSEP heat-flow, seismometer, and magnetometer experiments", "Panoramic Camera and X-ray Fluorescence Spectrometer"],
+                science: "The first Apollo lunar rover let astronauts travel farther from their lander to study the mountains and Hadley Rille.",
+                chapters: [
+                    { heading: "A new scale of exploration", text: "Apollo 15 landed beside Hadley Rille and the Apennine mountain front. The Lunar Roving Vehicle changed what astronauts could do: instead of staying close to the Lunar Module, they could carry tools and samples across several kilometers of varied terrain. Dave Scott and Jim Irwin visited multiple geological stops, compared rock units, and photographed the landscape while Mission Control helped track their route." },
+                    { heading: "A broad instrument suite", text: "On the surface, the crew deployed ALSEP experiments, including instruments for seismic activity, heat flow, and magnetic fields. In lunar orbit, the command module's cameras and spectrometers mapped the surface and its composition. The rover itself recorded navigation and operating data. Together these measurements connected the local field observations to a wider view of the Moon." },
+                    { heading: "Why Hadley mattered", text: "Samples from the mountains and rille included ancient crustal rocks and volcanic material, helping researchers distinguish impact history from later lava flows. The mission returned a larger and more varied collection than earlier landings. Apollo 15 became a model for using a rover, orbital observations, and trained field observers together to investigate a complex site." },
+                    { heading: "Rover engineering and field practice", text: "The battery-powered rover folded into the Lunar Module and unfolded after landing. Its wheels, steering, navigation display, and communications system had to work reliably in abrasive dust and low gravity. The crew trained to drive it while wearing pressurized suits and to stop frequently for observations. Each traverse was planned with limits on distance and return time, so science goals never outranked the requirement to get safely back." },
+                    { heading: "A new standard for lunar science", text: "Apollo 15's long traverses and expanded orbital mapping connected fine-scale geology with regional structure. Its instruments also gathered data on the Moon's gravity, composition, and surface environment from orbit. The mission demonstrated that future human exploration could be organized as field science, with specialized crews, mobile laboratories, and a carefully coordinated partnership between astronauts and researchers on Earth." }
+                ],
+                trivia: [
+                    "The rover let astronauts carry more tools and samples than they could manage on foot.",
+                    "Hadley Rille is a long channel thought to have been carved by ancient lava."
+                ],
+                source: "https://www.nasa.gov/the-apollo-program/",
+                image: "https://images-assets.nasa.gov/image/S71-30542/S71-30542~large.jpg",
+                imageAlt: "Apollo 15 lunar rover and lunar module during a training simulation",
+                imageCredit: "NASA"
+            },
+            {
+                id: 'apollo-16',
+                name: "Apollo 16",
+                lat: -8.9734,
+                lon: 15.5011,
+                desc: "Descartes Highlands. Fifth crewed lunar landing, April 1972.",
+                status: "Mission complete; the lunar rover and other hardware were left on the Moon.",
+                objective: "Investigate the Descartes Highlands and test the idea that the bright, hilly terrain was made by volcanic activity rather than impact ejecta.",
+                instruments: ["Lunar Roving Vehicle and sample tools", "ALSEP heat-flow, seismic, and lunar-surface magnetometer experiments", "Far Ultraviolet Camera/Spectrograph"],
+                science: "The rover helped the crew explore the Descartes Highlands and collect samples that tested ideas about how the lunar terrain formed.",
+                chapters: [
+                    { heading: "Testing a geological prediction", text: "Apollo 16 landed in the Descartes Highlands, where bright, rolling terrain had been interpreted by some scientists as volcanic. John Young and Charlie Duke used the rover to visit several sites, describe the rocks in place, and collect samples. The goal was to test the origin of the highlands rather than assume that a similar-looking landscape had the same history everywhere." },
+                    { heading: "Surface and orbital measurements", text: "The crew deployed ALSEP instruments to record seismic activity, heat flow, and magnetic properties. A far-ultraviolet camera/spectrograph operated from the lunar surface, while orbital experiments observed the Moon's composition and environment from above. Rover traverses let the crew compare formations that would have been unreachable on foot and gave scientists a spatial framework for interpreting each sample." },
+                    { heading: "A surprise in the samples", text: "The returned rocks were dominated by impact breccias and ancient crustal material rather than the volcanic rocks expected by some pre-mission interpretations. This was an important lesson in planetary science: remote observations can suggest a story, but samples and measurements on the ground can overturn it. Apollo 16 broadened the record of lunar highland geology and helped refine models of the Moon's early crust." },
+                    { heading: "A rover for difficult ground", text: "The Lunar Roving Vehicle carried batteries, wire-mesh wheels, navigation equipment, and communications hardware. Its range helped the crew investigate distant outcrops while preserving time to return to the lander. Rover tracks, photographs, and sample numbers were logged together, enabling geologists to reconstruct where each observation occurred and relate the samples to the terrain." },
+                    { heading: "The lesson of ground truth", text: "Apollo 16 illustrates how hypotheses should be tested rather than simply confirmed. Remote sensing had suggested one origin for the Descartes terrain, but the astronauts' observations and laboratory analysis told a different story. This approach remains central to planetary exploration: orbiters identify promising patterns, landers and rovers investigate them directly, and returned samples provide the most detailed tests." }
+                ],
+                trivia: [
+                    "Apollo 16 was the first crewed mission to land in the Moon's highlands.",
+                    "John Young drove the rover while jumping in place to demonstrate how easily astronauts could move in lunar gravity."
+                ],
+                source: "https://www.nasa.gov/the-apollo-program/",
+                image: "https://www.nasa.gov/wp-content/uploads/2023/03/as16-113-18339.4web.png",
+                imageAlt: "Apollo 16 astronaut John Young on the lunar surface",
+                imageCredit: "NASA"
+            },
+            {
+                id: 'apollo-17',
+                name: "Apollo 17",
+                lat: 20.1908,
+                lon: 30.7717,
+                desc: "Taurus–Littrow valley. Final crewed Apollo lunar landing, December 1972.",
+                status: "Mission complete; the lunar rover and other hardware were left on the Moon.",
+                objective: "Study both ancient highland rocks and younger volcanic deposits in Taurus–Littrow, and continue the most extensive Apollo surface-science program.",
+                instruments: ["Lunar Roving Vehicle and Apollo Lunar Surface Experiments Package", "Surface Electrical Properties and Lunar Seismic Profiling experiments", "Gravimeter, cameras, and sample tools"],
+                science: "The last Apollo crew to walk on the Moon used a rover to explore a valley between mountains and collected rocks of different ages.",
+                chapters: [
+                    { heading: "A geologist's field site", text: "Apollo 17 landed in Taurus–Littrow, a valley bordered by mountains and crossed by dark volcanic deposits. Geologist-astronaut Harrison Schmitt and commander Gene Cernan used the rover to investigate both highland rocks and younger material. Their traverses were planned to sample different geological units, allowing scientists to compare events separated by billions of years." },
+                    { heading: "Long-duration surface science", text: "The crew installed an ALSEP station and carried instruments for seismic profiling and surface electrical properties, alongside cameras, a gravimeter, and sample tools. The rover enabled multiple excursions and transported tools and rock boxes. From orbit, cameras and mapping instruments observed the wider region. The combination of field notes, instrument readings, photographs, and carefully documented samples created an unusually rich record." },
+                    { heading: "The final Apollo landing", text: "Apollo 17 returned important evidence about lunar volcanism and the ancient highlands. Some orange soil found during a traverse consisted of volcanic glass, revealing an explosive eruption unlike the familiar dark lava plains. The mission's hardware remains on the Moon, while the samples continue to be reexamined. Its end also left a long gap in human exploration of the lunar surface." },
+                    { heading: "The orange soil discovery", text: "During the second traverse, Schmitt noticed orange material around a small crater. The crew documented the deposit and collected samples that later proved to contain tiny volcanic glass beads. Their color and chemistry recorded an ancient fire-fountain eruption, giving scientists a rare view of explosive volcanism on the Moon and a way to study gases released from the lunar interior." },
+                    { heading: "A legacy still in the laboratory", text: "Apollo 17 returned more than 110 kilograms of lunar material, the largest sample collection of the Apollo missions. The crew's field notes, photographs, and carefully separated samples preserve context that cannot be recreated from orbit. Decades later, researchers continue to analyze selected samples and prepare untouched material for future techniques, linking the last Apollo landing to new generations of lunar science." }
+                ],
+                trivia: [
+                    "Geologist Harrison Schmitt became the first professional scientist to walk on the Moon.",
+                    "Apollo 17 was the last crewed lunar landing of the Apollo era—and the last time humans have walked on another world."
+                ],
+                source: "https://www.nasa.gov/the-apollo-program/",
+                image: "https://images-assets.nasa.gov/image/as17-145-22162/as17-145-22162~large.jpg",
+                imageAlt: "Apollo 17 lunar rover at the Taurus-Littrow landing site",
+                imageCredit: "NASA"
+            }
+        ];
+
+        const marsSites = [
+            {
+                id: 'viking-1',
+                name: "Viking 1",
+                markerLabel: "Viking 1 Landing Site",
+                lat: 22.48,
+                lon: -47.97,
+                desc: "Chryse Planitia. First successful Mars lander, operating from 1976 to 1982.",
+                status: "Silent since 1982; the lander remains on Mars.",
+                objective: "Viking 1 searched for signs of life, studied Martian soil and weather, and returned the first images from the surface of another planet.",
+                instruments: ["Three biology experiments and a gas chromatograph–mass spectrometer", "Two panoramic cameras and a robotic soil sampler", "Seismometer, weather sensors, and magnetic-property experiments"],
+                science: "Viking sent back the first images from the surface of Mars and used cameras, weather sensors, and experiments to investigate Martian soil.",
+                chapters: [
+                    { heading: "Two landers, one ambitious question", text: "Viking 1 was one of two nearly identical lander-orbiter missions launched in 1975. Its main goal was to search for evidence of life while characterizing the planet's surface and atmosphere. The lander touched down in Chryse Planitia in July 1976. Its cameras returned the first detailed panoramas from the Martian ground, while the orbiter mapped candidate landing areas and relayed communications." },
+                    { heading: "Testing the soil", text: "A robotic arm scooped soil into three biology experiments that looked for chemical changes associated with living organisms. A gas chromatograph–mass spectrometer heated samples and measured released compounds; cameras, weather sensors, and a seismometer added environmental context. The tests produced results that were difficult to interpret: some appeared biologically suggestive, while other measurements did not find the expected organic molecules." },
+                    { heading: "A lasting scientific argument", text: "Viking did not settle whether life ever existed on Mars. Instead, it established a baseline for Martian weather, soil chemistry, and surface geology—and demonstrated how hard it is to design a life-detection experiment when the environment is unfamiliar. Later missions used Viking's images and measurements to choose new landing sites and develop instruments that could search for habitability with more geological context." },
+                    { heading: "The orbiter was part of the laboratory", text: "The Viking orbiters did more than relay signals. Their cameras and infrared measurements mapped surface geology, atmospheric conditions, and candidate landing areas, while tracking data improved knowledge of Mars's shape and gravity. The orbiters continued science after their landers fell silent, illustrating how a paired mission can support both safe arrival and a longer regional survey." },
+                    { heading: "Why the life tests remain important", text: "Viking's three biology experiments used different strategies, including adding nutrients to soil or looking for gases released after heating. Results from one experiment appeared positive, yet follow-up measurements and the absence of detected organic molecules complicated that interpretation. The disagreement shaped later mission design: today's life-detection plans emphasize context, multiple independent measurements, and careful distinction between biological and non-biological chemistry." }
+                ],
+                trivia: [
+                    "Viking 1 worked on Mars for more than six years—far beyond its planned 90-day primary mission.",
+                    "Its life-detection experiments produced intriguing results, but scientists still debate how to interpret them."
+                ],
+                source: "https://science.nasa.gov/mission/viking-1/",
+                image: "https://assets.science.nasa.gov/content/dam/science/psd/photojournal/pia/pia00/pia00381/PIA00381.tif/jcr:content/renditions/cq5dam.web.1280.1280.jpeg",
+                imageAlt: "The first photograph taken from the surface of Mars by Viking 1",
+                imageCredit: "NASA/JPL-Caltech"
+            },
+            {
+                id: 'pathfinder',
+                name: "Mars Pathfinder / Sojourner",
+                markerLabel: "Pathfinder Landing Site",
+                lat: 19.13,
+                lon: -33.22,
+                desc: "Ares Vallis. Pathfinder landed in 1997 and deployed the first Mars rover, Sojourner.",
+                status: "Mission ended Sept. 27, 1997; the lander and rover remain on Mars.",
+                objective: "Demonstrate an affordable way to land on Mars using airbags, then test whether a small rover could drive out and investigate nearby rocks.",
+                instruments: ["Sojourner Alpha Particle X-ray Spectrometer (APXS)", "Lander camera and Sojourner front/rear cameras", "Lander meteorology package and soil-imaging tools"],
+                science: "The small Sojourner rover examined nearby rocks while Pathfinder measured weather and took thousands of pictures. Together they found clues that ancient Mars had flowing water.",
+                chapters: [
+                    { heading: "A technology demonstration with science attached", text: "Mars Pathfinder was designed to prove that a smaller, lower-cost mission could reach Mars and operate on the surface. It used parachutes and airbags to cushion a series of bounces, then opened its petals to expose the lander. Sojourner rolled down a ramp and became the first rover to operate on another planet, testing mobility, communications, and remote operations in real terrain." },
+                    { heading: "How Sojourner investigated rocks", text: "The rover carried the Alpha Particle X-ray Spectrometer, which measured elemental composition when it was placed against a rock. Front and rear cameras helped operators navigate and document targets; the lander camera surveyed the panorama and the meteorology package sampled temperature, pressure, and winds. Because the rover was small and slow, the team planned short drives and relied on images to select each next step." },
+                    { heading: "Water recorded in stone", text: "Pathfinder and Sojourner examined rounded pebbles, conglomerates, and other features consistent with an ancient flood plain. The results supported the idea that liquid water once moved across Mars, although they did not reveal exactly how long or under what climate. The mission's airbag landing and rover operations became important precedents for later Mars rovers, which carried more capable laboratories and traveled much farther." },
+                    { heading: "A landing system built around airbags", text: "After entering the atmosphere, Pathfinder used a parachute and retrorockets before airbags inflated around the lander. The protected spacecraft bounced across the surface and then opened its petals. This approach avoided the mass and complexity of large powered legs, making it suitable for a relatively small mission. Later spacecraft adopted and adapted the technique, while engineers used the landing to validate autonomous navigation and surface deployment." },
+                    { heading: "A global audience for Mars", text: "Pathfinder returned thousands of images and frequent updates, bringing the rover's daily decisions to classrooms and the public. That visibility did not replace science: it demonstrated that clear images and a transparent operations story can make engineering understandable. The mission also gave later teams practical experience with planning rover drives from millions of kilometers away, where each instruction had to anticipate terrain and communication delays." }
+                ],
+                trivia: [
+                    "The airbags bounced the lander across the surface before it came to rest—an interplanetary pinball landing.",
+                    "Sojourner was about the size of a microwave and operated for 83 sols."
+                ],
+                source: "https://science.nasa.gov/mission/mars-pathfinder/",
+                image: "https://science.nasa.gov/wp-content/uploads/2024/03/mars-pathfinder-presidential-panorama-lg.jpg?w=2048",
+                imageAlt: "Panorama of the Mars Pathfinder landing site",
+                imageCredit: "NASA/JPL-Caltech"
+            },
+            {
+                id: 'spirit',
+                name: "Spirit",
+                markerLabel: "Spirit Landing Site",
+                lat: -14.57,
+                lon: 175.47,
+                desc: "Gusev Crater. NASA rover that explored Mars from 2004 to 2010.",
+                status: "Mission ended in 2010; the rover remains on Mars.",
+                objective: "Search Gusev Crater for rocks and soils changed by water, and use the crater's geology to reconstruct Mars's environmental history.",
+                instruments: ["Panoramic and microscopic cameras", "Miniature Thermal Emission Spectrometer (Mini-TES)", "APXS, Mössbauer spectrometer, and rock-abrasion tool"],
+                science: "Spirit studied rocks and soils that revealed evidence of past water, and far outlived its original 90-Martian-day mission.",
+                chapters: [
+                    { heading: "A twin rover sent to follow water", text: "Spirit landed in Gusev Crater in January 2004. The crater had been selected because orbital images suggested water might once have flowed into it. Spirit's prime mission was planned for 90 sols, but the rover continued exploring for years. It drove across plains, climbed the Columbia Hills, and used its wheels, cameras, and arm-mounted tools to investigate rocks at a succession of field sites." },
+                    { heading: "A mobile geology laboratory", text: "Panoramic cameras recorded color views and helped identify targets. Mini-TES measured infrared signatures from a distance, while the Microscopic Imager, APXS, and Mössbauer spectrometer examined selected surfaces up close. A rock-abrasion tool removed weathered coatings to expose fresher material. The instruments worked as a team: a camera chose a target, a brush or grinder prepared it, and spectrometers measured its composition." },
+                    { heading: "Evidence, endurance, and a final resting place", text: "Spirit found altered minerals and soils that indicated water had affected rocks in multiple ways, including hot and acidic conditions at some sites. In 2009 it became trapped in soft soil, but the exposed material itself became a scientific target. The rover's long life made it possible to observe seasonal changes and revisit questions across different terrains. It stopped communicating in 2010 and remains in Gusev Crater." },
+                    { heading: "A mission extended by careful engineering", text: "Spirit's solar-powered design was intended for a short primary mission, but the rover survived well beyond it through cautious driving and problem-solving by its ground team. Dust accumulation reduced sunlight, while occasional cleaning events restored some power. When a wheel stopped working, operators changed driving strategies and continued toward new targets. Each extension required balancing scientific value against energy, temperature, and mechanical risk." },
+                    { heading: "Reading a complicated water history", text: "Spirit's discoveries did not point to one simple, continuously wet Mars. Some rocks recorded alteration by hot, acidic fluids, while other soils showed different chemical histories. This variety suggests that water's effects depended on local conditions and changed over time. By examining multiple terrains, the rover helped scientists move from asking whether water existed to asking when, where, and in what form it altered the crust." }
+                ],
+                trivia: [
+                    "Spirit got stuck in soft soil in 2009; its wheels still helped scientists study the soil as the rover became a stationary science platform.",
+                    "A dust-cleaning gust sometimes improved the rover's solar power—Mars gave the panels an occasional free wipe."
+                ],
+                source: "https://science.nasa.gov/mission/mars-exploration-rovers-spirit-and-opportunity/",
+                image: "https://images-assets.nasa.gov/image/PIA05040/PIA05040~orig.jpg",
+                imageAlt: "NASA's Spirit rover extending its suspension system after landing",
+                imageCredit: "NASA/JPL-Caltech"
+            },
+            {
+                id: 'opportunity',
+                name: "Opportunity",
+                markerLabel: "Opportunity Landing Site",
+                lat: -1.95,
+                lon: -5.53,
+                desc: "Meridiani Planum. NASA rover that explored Mars from 2004 to 2018.",
+                status: "Mission ended in 2018; the rover remains on Mars.",
+                objective: "Explore Meridiani Planum for geological evidence that liquid water once existed at the surface and assess how long those wet conditions lasted.",
+                instruments: ["Panoramic and microscopic cameras", "APXS and Mössbauer spectrometer", "Mini-TES, rock-abrasion tool, and magnets for collecting dust"],
+                science: "Opportunity found strong evidence that liquid water once changed Martian rocks. It kept exploring for nearly 15 years.",
+                chapters: [
+                    { heading: "Following the hematite signal", text: "Opportunity landed on Meridiani Planum in January 2004, where orbiting instruments had detected gray hematite—a mineral that can form in water-related settings. The rover's mission was to test that clue on the ground. It moved from its landing site to exposed outcrops and small craters, using each stop to compare textures, minerals, and the sequence of events recorded in the rocks." },
+                    { heading: "Tools for close-up fieldwork", text: "The Panoramic Camera documented the landscape; the Microscopic Imager examined grain-scale textures. APXS measured elemental chemistry, and the Mössbauer spectrometer identified iron-bearing minerals. Mini-TES mapped thermal infrared properties, while the Rock Abrasion Tool removed surface coatings so instruments could see into a target. Small magnets captured airborne dust, letting scientists study the fine particles that cover Mars." },
+                    { heading: "A wet past and an extraordinary journey", text: "Opportunity found sedimentary rocks and mineral signatures consistent with past liquid water, including evidence for water that was acidic and salty in some locations. The rover later climbed the rim of Endeavour Crater and explored exposures much older than its initial targets. A mission designed for 90 sols lasted nearly 15 years and traveled about 45 kilometers, transforming a local landing-site survey into a regional geological expedition." },
+                    { heading: "Following clues across the plains", text: "The rover's route linked small craters, bedrock exposures, and the rim of a much larger impact basin. At each stop, researchers compared mineral signatures with textures and layering, using orbital maps to place local observations into a regional story. The journey showed that a rover can use mobility as a scientific instrument: traveling between outcrops reveals relationships that a stationary lander cannot see." },
+                    { heading: "The storm that ended the mission", text: "In 2018, a planet-encircling dust storm blocked sunlight from Opportunity's solar panels. The rover entered a low-power state and stopped communicating; repeated attempts to contact it continued for months. Its end underscored a practical limit of solar-powered exploration and the need to plan for dust and seasonal darkness. The completed traverse and extensive image archive remain valuable records of Mars's surface and atmosphere." }
+                ],
+                trivia: [
+                    "Opportunity's final odometer reading was about 45 km (28 miles), a record for surface travel on another world at the time.",
+                    "Its mission was planned for 90 sols; it kept working for over 14 Earth years."
+                ],
+                source: "https://science.nasa.gov/mission/mars-exploration-rovers-spirit-and-opportunity/",
+                image: "https://images-assets.nasa.gov/image/PIA20285/PIA20285~orig.jpg",
+                imageAlt: "Opportunity examining a rock target with its robotic arm",
+                imageCredit: "NASA/JPL-Caltech"
+            },
+            {
+                id: 'phoenix',
+                name: "Phoenix",
+                markerLabel: "Phoenix Landing Site",
+                lat: 68.22,
+                lon: -125.7,
+                desc: "Green Valley, Vastitas Borealis. Found water ice in a soil sample from the Martian arctic, 2008.",
+                status: "Mission ended in 2008; the lander remains in the Martian arctic.",
+                objective: "Study the soil and near-surface ice of Mars's far north to learn whether the environment could support life and how water behaves in the polar region.",
+                instruments: ["Robotic arm and scoop", "Thermal and Evolved Gas Analyzer (TEGA)", "Microscopy, Electrochemistry, and Conductivity Analyzer (MECA)", "Stereo camera and weather station"],
+                science: "A robotic arm dug into the soil and uncovered water ice just below the surface.",
+                chapters: [
+                    { heading: "A lander built for the polar environment", text: "Phoenix landed in the Martian northern plains in May 2008. Unlike a rover, it stayed in one place, using a long robotic arm to dig trenches and deliver soil to instruments on its deck. The landing site was chosen because orbital measurements suggested water ice lay close to the surface. The mission asked how polar soil, ice, and atmosphere interact—and whether the environment could have been habitable." },
+                    { heading: "Sampling the soil and ice", text: "The Robotic Arm Camera photographed trench walls and grains. TEGA heated samples in small ovens and analyzed released gases to identify minerals and volatiles. MECA included a wet-chemistry laboratory, optical and atomic-force microscopes, and conductivity probes. A stereo camera made a surrounding panorama, while a weather station tracked temperature, pressure, and wind. Together these tools connected visible layering to chemical composition." },
+                    { heading: "A chemical neighborhood of water", text: "Phoenix confirmed water ice beneath the soil and detected perchlorate salts, which affect how water freezes and behaves. Its observations showed that polar Mars is not simply a dry, inert desert: frost, ice, salts, and atmospheric changes form an active system. The lander operated through the Martian summer and then lost power as winter darkness arrived, leaving its measurements as a seasonal snapshot." },
+                    { heading: "Following the water cycle", text: "Phoenix's robotic arm dug several trenches, exposing layers with different colors and textures. In some trenches, bright material disappeared as it was exposed, consistent with water ice sublimating in the dry atmosphere. The lander also watched clouds and falling snow, tying ground conditions to the atmosphere above. These observations connected near-surface ice to the daily and seasonal weather of the Martian Arctic." },
+                    { heading: "Habitability is more than finding water", text: "The mission assessed a combination of water, chemistry, and environmental conditions rather than treating ice alone as proof of habitability. Perchlorate can influence the availability of liquid water and organic chemistry, while temperature and radiation affect how long molecules persist. Phoenix's results helped define the complex polar environment and gave later missions a more detailed picture of what a soil sample may contain." }
+                ],
+                trivia: [
+                    "Phoenix watched snow fall from Martian clouds; some flakes vaporized before reaching the ground.",
+                    "The lander was named Phoenix because it reused designs and hardware ideas from earlier Mars missions."
+                ],
+                source: "https://science.nasa.gov/mission/mars-phoenix/",
+                image: "https://science.nasa.gov/wp-content/uploads/2024/03/phx20110310b-pia13804-phoenix-msp-deck.jpg?w=2000",
+                imageAlt: "View across the deck and solar panels of the Phoenix Mars lander",
+                imageCredit: "NASA/JPL-Caltech/University of Arizona"
+            },
+            {
+                id: 'curiosity',
+                name: "Curiosity",
+                markerLabel: "Curiosity Landing Site",
+                lat: -4.59,
+                lon: 137.44,
+                desc: "Gale Crater. NASA's car-sized rover, exploring Mars since 2012.",
+                status: "Active mission.",
+                objective: "Determine whether Gale Crater once offered long-lived habitable environments, then climb Mount Sharp to read the changing story in its rock layers.",
+                instruments: ["ChemCam laser and remote micro-imager", "SAM chemistry lab and CheMin X-ray diffractometer", "Mastcam, MAHLI microscope, APXS, and radiation detector", "Drill, weather station, and environmental sensors"],
+                science: "A rolling laboratory drills rocks and studies their chemistry. Its discoveries show that ancient Mars once had environments that could support microbial life.",
+                chapters: [
+                    { heading: "A long climb through a changing planet", text: "Curiosity landed inside Gale Crater in August 2012. Its central question is whether Mars ever had environments with the ingredients and conditions needed for microbial life. The rover began on the crater floor and has been climbing the layered foothills of Mount Sharp, where successive rock layers preserve changes in water, climate, and chemistry over geological time." },
+                    { heading: "A laboratory that can choose its own samples", text: "Curiosity combines remote sensing with hands-on analysis. ChemCam fires a laser at distant rocks and reads the resulting light; Mastcam images targets in color and stereo. The drill collects powdered rock for CheMin's X-ray mineral analysis and SAM's chemical tests. MAHLI works like a hand lens, APXS measures elements, and environmental sensors track radiation and weather that shape a crewed mission's future safety." },
+                    { heading: "From habitable lakes to organic chemistry", text: "Early results showed that Gale Crater once contained a freshwater lake with chemical conditions suitable for microbial life. Later measurements found organic molecules preserved in rocks, while changes in minerals and layers recorded a shift toward drier conditions. Organic molecules are not proof of life—they can form without biology—but they are valuable clues. Curiosity's continuing traverse builds a timeline rather than relying on one spectacular discovery." },
+                    { heading: "A landing that became a mobile laboratory", text: "Curiosity used a guided entry and a rocket-powered sky crane to descend through the atmosphere and lower the rover onto its wheels. After landing, engineers checked its systems and began a route toward Mount Sharp, with science teams choosing targets from images and orbital maps. The rover's size allows it to carry a chemistry lab, drill, and power source that can operate through night and dusty seasons." },
+                    { heading: "Building a stratigraphic record", text: "As Curiosity climbs, the team studies layers in sequence rather than treating each rock as an isolated sample. Mineral changes, sediment structures, and the rover's chemistry measurements indicate how water availability and environmental conditions shifted. The approach helps test whether habitable conditions persisted or appeared only briefly, and it provides a geological framework for comparing sites across the crater." }
+                ],
+                trivia: [
+                    "Curiosity's landing system used a rocket-powered sky crane to lower the rover gently onto its wheels.",
+                    "The rover carries a small amount of plutonium-powered electrical generation, so it does not depend on sunlight."
+                ],
+                source: "https://science.nasa.gov/mission/msl-curiosity/",
+                image: "https://images-assets.nasa.gov/image/PIA19808/PIA19808~orig.jpg",
+                imageAlt: "Curiosity rover taking a self-portrait on Mount Sharp",
+                imageCredit: "NASA/JPL-Caltech/MSSS"
+            },
+            {
+                id: 'insight',
+                name: "InSight",
+                markerLabel: "InSight Landing Site",
+                lat: 4.5,
+                lon: 135.62,
+                desc: "Elysium Planitia. First mission to study the deep interior of Mars, 2018–2022.",
+                status: "Mission ended Dec. 15, 2022; the lander remains on Mars.",
+                objective: "Listen for marsquakes and measure Mars's internal heat to reveal the size, structure, and activity of its crust, mantle, and core.",
+                instruments: ["SEIS ultra-sensitive seismometer", "Heat Flow and Physical Properties Package (HP3)", "RISE radio-science experiment and weather sensors"],
+                science: "Its seismometer detected marsquakes, giving scientists a way to study the planet’s crust, mantle, and core.",
+                chapters: [
+                    { heading: "Listening beneath the surface", text: "InSight landed on the broad plains of Elysium Planitia in November 2018. It was designed as a stationary geophysical observatory, not a rover: its job was to measure what happens inside Mars. The landing site was chosen for safety and for a relatively simple regional geology, allowing tiny motions and heat-flow measurements to be interpreted as signals from the planet's interior." },
+                    { heading: "Deploying instruments by robotic arm", text: "The seismometer SEIS was placed directly on the ground and covered by a wind-and-thermal shield. It detected ground vibrations from marsquakes and impacts. The HP3 heat probe was intended to hammer several meters down and measure heat escaping from the interior, but unexpected soil properties prevented it from reaching its planned depth. RISE used radio tracking to measure the planet's wobble, while cameras and weather sensors monitored the site." },
+                    { heading: "A new view of Mars's interior", text: "Thousands of seismic events allowed scientists to estimate the thickness of the crust and infer the structure of the mantle and liquid core. The results turned Mars from a world studied mainly through its surface into one whose interior could be measured directly. Dust eventually reduced the lander's solar power, and the mission ended in 2022, but the seismic record continues to inform models of how rocky planets form and cool." },
+                    { heading: "Quakes, impacts, and the signal in the noise", text: "SEIS recorded marsquakes ranging from tiny events to larger tremors, along with vibrations from wind and occasional meteorite impacts. Scientists compared wave arrivals and frequencies to estimate how seismic energy moved through different layers. Separating a weak planetary signal from environmental noise required continuous monitoring and careful analysis, making the mission's long, quiet listening campaign essential to its science." },
+                    { heading: "Why the mole could not burrow", text: "HP3 was designed to hammer itself beneath the surface and measure heat flow, but the soil did not provide the friction its self-hammering mechanism needed. Engineers tested techniques using a replica in a terrestrial lab and sent commands across interplanetary distance, but the probe never reached its intended depth. The difficulty was a reminder that small-scale soil properties can defeat a tool even when the broader mission succeeds." }
+                ],
+                trivia: [
+                    "SEIS was so sensitive that scientists had to shield it from wind and temperature changes to hear tiny ground motions.",
+                    "The heat probe nicknamed “the mole” struggled to dig into unexpectedly clumpy soil—engineering on Mars is never boring."
+                ],
+                source: "https://science.nasa.gov/mission/insight/",
+                image: "https://images-assets.nasa.gov/image/PIA19811/PIA19811~medium.jpg",
+                imageAlt: "Artist's concept of the InSight lander with its instruments deployed",
+                imageCredit: "NASA/JPL-Caltech"
+            },
+            {
+                id: 'perseverance',
+                name: "Perseverance",
+                markerLabel: "Perseverance Landing Site",
+                lat: 18.44,
+                lon: 77.45,
+                desc: "Jezero Crater. NASA rover searching for signs of ancient microbial life since 2021.",
+                status: "Active mission.",
+                objective: "Explore an ancient river delta and lakebed for signs of past microbial life, characterize the geology, and collect carefully selected samples for possible return to Earth.",
+                instruments: ["SHERLOC Raman/UV spectrometer and WATSON close-up camera", "PIXL X-ray fluorescence instrument", "SuperCam laser spectrometer and Mastcam-Z zoom cameras", "RIMFAX ground-penetrating radar and MEDA weather station"],
+                science: "Perseverance studies an ancient lake-and-river landscape and stores selected rock samples for possible return to Earth.",
+                chapters: [
+                    { heading: "A delta, a crater, and a search strategy", text: "Perseverance landed in Jezero Crater in February 2021, targeting a site with an ancient river delta and lake basin. Its science plan is to search for signs of past microbial life while documenting geology and climate. The team maps candidate rocks, evaluates their context, and chooses samples that could answer specific questions about water, habitability, and the preservation of biosignatures." },
+                    { heading: "A coordinated instrument suite", text: "Mastcam-Z provides zoomable stereo panoramas; SuperCam uses lasers, cameras, and spectrometers to study distant targets. PIXL maps elemental chemistry at close range, while SHERLOC uses ultraviolet light and Raman spectroscopy to identify minerals and organic compounds. RIMFAX probes shallow subsurface layers with radar, and MEDA measures weather. A drill and sample tubes collect cores selected for their scientific value." },
+                    { heading: "Collecting samples for another generation", text: "Perseverance investigates the delta's sedimentary rocks and the crater floor's igneous rocks, building a record of different environments. It caches sealed samples so a future campaign could bring them to laboratories on Earth, where instruments far larger than a rover can test them. The rover also carried Ingenuity, which demonstrated powered flight on another planet and scouted routes from the air before its flight campaign ended." },
+                    { heading: "Choosing samples with context", text: "The rover team studies each candidate in place before deciding whether to abrade, analyze, or core it. Images and instrument readings record the rock's texture, chemistry, and relationship to nearby layers. Sample tubes are sealed and documented so that a future laboratory can interpret them alongside their geological setting. This careful selection matters because returning a small number of samples makes each choice consequential." },
+                    { heading: "A technology testbed for exploration", text: "Perseverance uses autonomous navigation to avoid hazards and plan drives, while Earth-based operators review its route and scientific targets. Ingenuity's flights tested whether a rotorcraft could operate in Mars's thin atmosphere and scout terrain ahead. The rover also carries systems for future exploration research, including environmental monitoring and hardware demonstrations, so its work extends beyond the rocks it directly studies." }
+                ],
+                trivia: [
+                    "Perseverance carried Ingenuity, the first powered aircraft to fly on another planet.",
+                    "Its microphone captured the first recorded sounds of Mars, including rover and wind noise."
+                ],
+                source: "https://science.nasa.gov/mission/mars-2020-perseverance/",
+                image: "https://images-assets.nasa.gov/image/PIA24542/PIA24542~medium.jpg",
+                imageAlt: "Perseverance rover taking a selfie with the Ingenuity helicopter",
+                imageCredit: "NASA/JPL-Caltech/MSSS"
+            },
+            {
+                id: 'mars-south-pole',
+                category: 'planet-fact',
+                name: "Mars South Polar Cap",
+                markerLabel: "Seasonal dry ice",
+                lat: -90,
+                lon: 0,
+                desc: "A planetary feature rather than a landing site; this marker points to the Martian south polar region.",
+                status: "Natural feature · no lander is stationed at this marker.",
+                objective: "Mars's polar caps preserve a record of seasonal climate. Spacecraft study how frost forms, retreats, and interacts with the atmosphere.",
+                instruments: ["No surface instruments at this point", "Orbital cameras and spectrometers map the polar deposits"],
+                science: "The south polar region has a permanent water-ice cap covered by seasonal carbon-dioxide frost. As the seasons change, carbon dioxide freezes from the atmosphere and later sublimates back into gas.",
+                chapters: [
+                    { heading: "A seasonal cap, not a landing site", text: "The south polar region is a natural feature included as a playful science stop, not a place where a rover or lander is parked. Mars has a permanent water-ice deposit near the south pole, while a seasonal layer of carbon-dioxide frost grows and shrinks with the planet's year. The visible cap changes as sunlight and temperature shift between polar summer and winter." },
+                    { heading: "How orbiters study the poles", text: "Spacecraft in orbit use cameras to map the cap's shape, spectrometers to distinguish water ice from carbon dioxide ice, and thermal instruments to measure surface temperatures. Repeated observations reveal when frost forms, how quickly it retreats, and how the exchange of carbon dioxide affects atmospheric pressure. These measurements also help scientists understand dust, wind, and climate cycles across Mars." },
+                    { heading: "The dry-ice punchline has real science behind it", text: "Carbon dioxide freezes directly from the Martian atmosphere, creating seasonal slabs and frost—solid dry ice, not frozen water. The process is part of a global seasonal cycle that moves a substantial amount of atmosphere between the poles. The south polar cap is therefore both a witty map pin and a reminder that familiar substances behave differently under another world's pressure, temperature, and sunlight." },
+                    { heading: "A changing cap with several layers", text: "Mars has both seasonal carbon-dioxide frost and longer-lived polar deposits rich in water ice. Their boundaries and appearances vary with latitude, elevation, dust, and the amount of sunlight each season. Orbital images and radar observations help distinguish surface frost from deeper deposits, while repeated passes reveal how the cap's edges retreat and advance through the Martian year." },
+                    { heading: "A planet-wide climate connection", text: "When carbon dioxide freezes onto the winter pole, atmospheric pressure and circulation change; when sunlight returns, the frost sublimates and gas moves back into the atmosphere. Winds carry dust and water vapor as this seasonal cycle unfolds. Studying the poles therefore helps scientists interpret weather far from the ice itself and compare today's climate with layered deposits that preserve older environmental conditions." }
+                ],
+                trivia: [
+                    "Yes, that seasonal frost is solid dry ice. Mars has a freezer the size of a polar cap—and no door.",
+                    "The cap grows and shrinks with the seasons as carbon dioxide leaves and returns to the atmosphere."
+                ],
+                links: [
+                    { label: 'NASA: Mars facts and seasons', url: 'https://science.nasa.gov/mars/facts/' }
+                ]
+            }
+        ];
+
+        const deepSpaceCraft = [
+            {
+                id: 'voyager-1',
+                name: 'Voyager 1',
+                status: 'Launched in 1977 · Still communicating',
+                objective: "Voyager 1 was sent to study the outer planets, then continue outward to measure the heliosphere and the space between the stars.",
+                instruments: ["Imaging Science System cameras", "Magnetometer and Plasma Wave Subsystem", "Cosmic Ray and Low-Energy Charged Particle instruments"],
+                science: 'Voyager 1 crossed the heliopause in 2012. Its remaining instruments measure the environment between the stars, including magnetic fields and plasma waves. Engineers switch off equipment over time to conserve its fading power.',
+                chapters: [
+                    { heading: "From planetary tour to interstellar explorer", text: "Voyager 1 launched in 1977 during a rare alignment that made gravity-assist routes past the outer planets possible. It flew by Jupiter and Saturn, returning close-up views of their atmospheres, rings, moons, and magnetic environments. After Saturn, its trajectory carried it northward out of the plane of the planets. The spacecraft then became a long-duration observatory aimed at the boundary between the Sun's domain and interstellar space." },
+                    { heading: "A suite built for a long journey", text: "Voyager's cameras and spectrometers studied visible and infrared light; plasma, energetic-particle, cosmic-ray, and magnetometer instruments sampled charged particles and fields. A plasma-wave instrument can detect radio emissions produced by plasma interactions. The spacecraft uses a radioisotope power source and a high-gain antenna to send faint measurements home. As electrical power declines, engineers turn off heaters and instruments in a careful sequence." },
+                    { heading: "Crossing the heliopause", text: "Voyager 1 crossed the heliopause in 2012, where the outward solar wind gives way to the interstellar environment. The boundary was identified through changes in particle measurements, not by crossing a visible wall. Its data show how magnetic fields and charged particles behave beyond the Sun's protective bubble. The spacecraft still returns a small stream of measurements, extending humanity's direct observations farther from Earth than any other probe." },
+                    { heading: "How the planetary flybys changed science", text: "At Jupiter and Saturn, Voyager 1 observed active atmospheres, complex rings, and moons with surprising geology. Its images of Io revealed active volcanism, and its Saturn encounter included close study of Titan. These brief visits shaped later missions by identifying questions that orbiters could investigate in depth, including the chemistry of Titan's atmosphere and the processes that power icy or volcanic moons." },
+                    { heading: "Communicating from the edge", text: "Voyager 1's high-gain antenna must remain pointed toward Earth while the spacecraft spins slowly for stability. Signals arriving here are extraordinarily faint, so large ground antennas and careful scheduling are required to receive them. The team monitors aging hardware, corrects small changes in pointing, and prioritizes instruments as power falls. Every usable measurement is a message from a region no other working spacecraft has reached." }
+                ],
+                trivia: [
+                    "Voyager 1 carries the Golden Record: sounds and images chosen to represent life on Earth, packed like a cosmic message in a bottle.",
+                    "It is so far away that a radio command takes many hours to arrive; there is no quick “turn it off and on again.”"
+                ],
+                image: 'https://images-assets.nasa.gov/image/PIA14111/PIA14111~orig.jpg',
+                imageAlt: 'NASA artist concept of a Voyager spacecraft',
+                imageCredit: 'NASA/JPL-Caltech',
+                links: [
+                    { label: 'NASA: Voyager mission', url: 'https://science.nasa.gov/mission/voyager/' },
+                    { label: 'NASA: location and instrument status', url: 'https://science.nasa.gov/mission/voyager/where-are-voyager-1-and-voyager-2-now/' },
+                    { label: 'NASA: spacecraft and instruments', url: 'https://science.nasa.gov/mission/voyager/spacecraft/' }
+                ]
+            },
+            {
+                id: 'voyager-2',
+                name: 'Voyager 2',
+                status: 'Launched in 1977 · Still communicating',
+                objective: "Voyager 2 completed a rare tour of all four giant planets and now samples the solar wind's boundary and interstellar space.",
+                instruments: ["Imaging Science System cameras", "Plasma Science and Plasma Wave instruments", "Magnetometer, Cosmic Ray, and Low-Energy Charged Particle instruments"],
+                science: 'After visiting Jupiter, Saturn, Uranus, and Neptune, Voyager 2 crossed the heliopause in 2018. It continues to sample interstellar space with the instruments still available on this long-running spacecraft.',
+                chapters: [
+                    { heading: "The only spacecraft to visit all four giant planets", text: "Voyager 2 launched in August 1977 and followed a trajectory that enabled encounters with Jupiter, Saturn, Uranus, and Neptune. The spacecraft used gravity assists to change speed and direction, turning a single launch into a multi-planet expedition. Each encounter was a brief flyby: mission planners had to aim instruments, collect data, and transmit the most important observations while the planet swept past." },
+                    { heading: "What the instruments measured", text: "The imaging system mapped clouds, rings, and moons. Infrared and ultraviolet spectrometers examined atmospheric composition and temperature, while plasma, particle, and magnetic-field instruments studied each planet's magnetosphere. Voyager 2's Neptune encounter revealed active weather and the moon Triton; its Uranus flyby uncovered a tilted magnetic field and a system of dark rings. The same instrument suite later measured the outer heliosphere." },
+                    { heading: "A spacecraft still in contact", text: "Voyager 2 crossed the heliopause in 2018 and now measures interstellar particles and fields. Its power supply steadily weakens, so engineers balance instrument operation against the heat and electricity needed to keep the spacecraft functioning. Like Voyager 1, it carries a Golden Record. Its decades of observations transformed the giant planets from telescopic points into complex worlds with weather, geology, and diverse moons." },
+                    { heading: "A route chosen for rare alignments", text: "The spacecraft's tour depended on a sequence of planetary positions that allowed gravity assists to redirect it from one giant planet to the next. The route required careful targeting and could not simply be repeated on demand. Voyager 2's passage by Uranus and Neptune gave humanity its first close views of those distant worlds and created a baseline for telescopes and future mission proposals." },
+                    { heading: "Keeping an aging probe alive", text: "Voyager 2 operates billions of kilometers away, where a command takes many hours to arrive and a reply takes just as long. Engineers test commands, monitor the spacecraft's temperature and power, and shut down equipment in stages as the radioisotope generator weakens. Those operations preserve a limited set of instruments for as long as possible, extending a mission designed for a planetary tour into a study of interstellar space." }
+                ],
+                trivia: [
+                    "Voyager 2 is the only spacecraft to have visited Uranus and Neptune.",
+                    "The mission used planetary gravity assists—celestial pinball, carefully calculated—to gain speed and change direction."
+                ],
+                image: 'https://images-assets.nasa.gov/image/PIA17036/PIA17036~orig.jpg',
+                imageAlt: 'NASA artist concept of a Voyager spacecraft against a starfield',
+                imageCredit: 'NASA/JPL-Caltech',
+                links: [
+                    { label: 'NASA: Voyager mission', url: 'https://science.nasa.gov/mission/voyager/' },
+                    { label: 'NASA: location and instrument status', url: 'https://science.nasa.gov/mission/voyager/where-are-voyager-1-and-voyager-2-now/' },
+                    { label: 'NASA: spacecraft and instruments', url: 'https://science.nasa.gov/mission/voyager/spacecraft/' }
+                ]
+            },
+            {
+                id: 'new-horizons',
+                name: 'New Horizons',
+                status: 'Launched in 2006 · NASA lists the mission as active',
+                objective: "Make the first close-up reconnaissance of Pluto and its moons, then continue through the Kuiper Belt to study other small, ancient worlds.",
+                instruments: ["LORRI long-range telescope camera and Ralph color/infrared imager", "Alice ultraviolet and REX radio-science instruments", "SWAP solar-wind analyzer and PEPSSI energetic-particle detector", "Student-built Venetia Burney Student Dust Counter"],
+                science: 'New Horizons flew past Pluto in 2015 and the Kuiper Belt object Arrokoth in 2019. Its cameras, spectrometers, and student-built dust counter helped reveal distant worlds and the space around them.',
+                chapters: [
+                    { heading: "A fast reconnaissance of the distant frontier", text: "New Horizons launched in 2006 and reached Pluto in July 2015 after a journey of nearly a decade. The spacecraft was designed for a high-speed flyby, not orbit insertion: it had one close pass to map Pluto and its moons, then continued into the Kuiper Belt. The team planned observations years in advance and uploaded encounter sequences before the spacecraft was close enough for real-time steering." },
+                    { heading: "Cameras, spectra, and the space between worlds", text: "LORRI provided high-resolution black-and-white images, while Ralph combined color imaging with infrared spectroscopy. Alice studied ultraviolet emissions and atmospheric occultations; REX used radio signals to probe temperature and pressure. SWAP and PEPSSI measured solar-wind and energetic particles, and the student-built dust counter sampled tiny particles along the route. Together, the instruments examined both distant surfaces and the environment around them." },
+                    { heading: "Pluto, Arrokoth, and what comes next", text: "Pluto revealed mountains of water ice, glaciers of nitrogen ice, a layered atmosphere, and active-looking landscapes. In 2019, New Horizons flew past Arrokoth, a small Kuiper Belt object that preserves material from the early Solar System. The encounter showed how primitive building blocks may have gently assembled. The spacecraft continues to observe distant objects and the dust and particles of the Kuiper Belt as its extended mission proceeds." },
+                    { heading: "A flyby planned years in advance", text: "New Horizons could not slow down enough to orbit Pluto, so its team designed a precisely timed sequence of observations around a short closest-approach window. The spacecraft stored commands onboard because radio signals take hours to travel between Earth and the probe. It then returned data gradually over many months, with mission planners prioritizing observations and adjusting later downlink schedules as new results emerged." },
+                    { heading: "Why a small icy world mattered", text: "Pluto's varied terrain, volatile ices, haze layers, and interacting moons revealed a complex world rather than a frozen, featureless remnant. The later Arrokoth flyby extended the story from a dwarf planet to a small primordial body, offering clues about gentle accretion in the early Solar System. Together, the encounters showed that the distant Kuiper Belt contains worlds with distinct histories and active scientific value." }
+                ],
+                trivia: [
+                    "New Horizons crossed the distance of the Moon's orbit in about nine hours after launch.",
+                    "Its dust counter was designed and built by students—the mission literally carried student science into the Kuiper Belt."
+                ],
+                image: 'https://images-assets.nasa.gov/image/PIA21943/PIA21943~orig.jpg',
+                imageAlt: 'Artist concept of New Horizons flying past the Kuiper Belt object Arrokoth',
+                imageCredit: 'NASA/Johns Hopkins University Applied Physics Laboratory/Southwest Research Institute',
+                links: [
+                    { label: 'NASA: New Horizons mission', url: 'https://science.nasa.gov/mission/new-horizons/' }
+                ]
+            }
+        ];
+
+        // Scene, Camera, Renderer
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        document.body.appendChild(renderer.domElement);
+
+        camera.position.set(0, 0, 18);
+
+        // OrbitControls
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.rotateSpeed = 0.7;
+        controls.zoomSpeed = 0.5;
+        controls.minDistance = 6.5;
+        controls.maxDistance = 22;
+
+        // Globe group contains the surface and whichever site's markers are active.
+        const earthGroup = new THREE.Group();
+        scene.add(earthGroup);
+
+        const EARTH_RADIUS = 5;
+
+        // Texture Loader with trustworthy CORS-friendly textures
+        const textureLoader = new THREE.TextureLoader();
+        
+        // Load Earth Daymap and Clouds
+        const earthTexture = textureLoader.load('https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg');
+        const bumpTexture = textureLoader.load('https://unpkg.com/three-globe/example/img/earth-topology.png');
+        const cloudTexture = textureLoader.load('https://unpkg.com/three-globe/example/img/earth-clouds.png');
+        const mapStatus = document.getElementById('map-status');
+        const moonButton = document.getElementById('moon-button');
+        const marsButton = document.getElementById('mars-button');
+        let moonTexture = null;
+        let marsTexture = null;
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+        scene.add(ambientLight);
+
+        const sunLight = new THREE.DirectionalLight(0xffffff, 1.2);
+        sunLight.position.set(12, 6, 10);
+        scene.add(sunLight);
+
+        // 1. Earth Base Globe
+        const earthGeo = new THREE.SphereGeometry(EARTH_RADIUS, 64, 64);
+        const earthMat = new THREE.MeshPhongMaterial({
+            map: earthTexture,
+            bumpMap: bumpTexture,
+            bumpScale: 0.04,
+            shininess: 15
+        });
+        const earthMesh = new THREE.Mesh(earthGeo, earthMat);
+        earthGroup.add(earthMesh);
+
+        // 2. Cloud Layer
+        const cloudGeo = new THREE.SphereGeometry(EARTH_RADIUS * 1.012, 64, 64);
+        const cloudMat = new THREE.MeshStandardMaterial({
+            map: cloudTexture,
+            transparent: true,
+            opacity: 0.4,
+            blending: THREE.NormalBlending
+        });
+        const cloudMesh = new THREE.Mesh(cloudGeo, cloudMat);
+        earthGroup.add(cloudMesh);
+
+        // 3. Atmosphere Shader Glow
+        const atmosphereGeo = new THREE.SphereGeometry(EARTH_RADIUS * 1.12, 64, 64);
+        const atmosphereMat = new THREE.ShaderMaterial({
+            vertexShader: `
+                varying vec3 vNormal;
+                void main() {
+                    vNormal = normalize(normalMatrix * normal);
+                    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                }
+            `,
+            fragmentShader: `
+                varying vec3 vNormal;
+                void main() {
+                    float intensity = pow(0.6 - dot(vNormal, vec3(0.0, 0.0, 1.0)), 2.5);
+                    gl_FragColor = vec4(0.2, 0.65, 1.0, 1.0) * intensity * 0.45;
+                }
+            `,
+            blending: THREE.AdditiveBlending,
+            side: THREE.BackSide,
+            transparent: true
+        });
+        const atmosphere = new THREE.Mesh(atmosphereGeo, atmosphereMat);
+        scene.add(atmosphere);
+
+        // Helper: Convert Lat/Lon to Vector3
+        function latLongToVector3(lat, lon, radius) {
+            const phi = (90 - lat) * (Math.PI / 180);
+            const theta = (lon + 180) * (Math.PI / 180);
+            const x = -(radius * Math.sin(phi) * Math.cos(theta));
+            const z = (radius * Math.sin(phi) * Math.sin(theta));
+            const y = (radius * Math.cos(phi));
+            return new THREE.Vector3(x, y, z);
+        }
+
+        // Marker Objects Array for pulse updates & Raycasting
+        const pulseRings = [];
+        const markerMeshes = [];
+        const markerLabels = [];
+        const markerGroup = new THREE.Group();
+        earthGroup.add(markerGroup);
+        const legendList = document.getElementById('legend-list');
+        const deepSpaceView = document.getElementById('deep-space-view');
+        const detailDrawer = document.getElementById('details-drawer');
+        const detailTitle = document.getElementById('detail-title');
+        const detailFigure = document.getElementById('detail-figure');
+        const detailBody = document.getElementById('detail-body');
+        const detailImage = document.getElementById('detail-image');
+        const detailImageCredit = document.getElementById('detail-image-credit');
+        const detailStatus = document.getElementById('detail-status');
+        const detailStatusText = document.getElementById('detail-status-text');
+        const detailKicker = document.getElementById('detail-kicker');
+        const detailObjectiveHeading = document.getElementById('detail-objective-heading');
+        const detailObjective = document.getElementById('detail-objective');
+        const detailInstrumentsHeading = document.getElementById('detail-instruments-heading');
+        const detailInstruments = document.getElementById('detail-instruments');
+        const detailStoryHeading = document.getElementById('detail-story-heading');
+        const detailStory = document.getElementById('detail-story');
+        const detailChaptersHeading = document.getElementById('detail-chapters-heading');
+        const detailChapters = document.getElementById('detail-chapters');
+        const detailTrivia = document.getElementById('detail-trivia');
+        const detailLinks = document.getElementById('detail-links');
+        const detailClose = document.getElementById('detail-close');
+        const speechStopButton = document.getElementById('speech-stop');
+        const speechStatus = document.getElementById('speech-status');
+        const pageTitle = document.getElementById('page-title');
+        const pageSubtitle = document.getElementById('page-subtitle');
+        const headerOverlay = document.getElementById('header-overlay');
+        const earthButton = document.getElementById('earth-button');
+        const deepSpaceButton = document.getElementById('deep-space-button');
+        const craftSelect = document.getElementById('craft-select');
+        const craftImage = document.getElementById('craft-image');
+        const craftName = document.getElementById('craft-name');
+        const craftCount = document.getElementById('craft-count');
+        const previousSpacecraftButton = document.getElementById('previous-spacecraft');
+        const nextSpacecraftButton = document.getElementById('next-spacecraft');
+        const mapScale = document.getElementById('map-scale');
+        const mapScaleLabel = document.getElementById('map-scale-label');
+        const mapScaleLine = document.getElementById('map-scale-line');
+        const defaultGlobeSpinSpeed = 0.0002;
+        let currentMap = 'earth';
+        let globeSpinSpeed = defaultGlobeSpinSpeed;
+        let targetGlobeSpinSpeed = defaultGlobeSpinSpeed;
+        let equatorReturn = null;
+        let currentCraftIndex = 0;
+        let detailsOpener = null;
+        let lastScaleLabel = '';
+        let lastScaleWidth = 0;
+        let activeUtterance = null;
+        let activeSpeechButton = null;
+        let speechPaused = false;
+
+        function updateHeaderVisibility() {
+            if (currentMap === 'deep-space') {
+                headerOverlay.classList.remove('is-obscured');
+                return;
+            }
+
+            const fadeDistance = EARTH_RADIUS * 3.2;
+            const cameraDistance = camera.position.distanceTo(earthGroup.position);
+            headerOverlay.classList.toggle('is-obscured', cameraDistance <= fadeDistance);
+        }
+
+        function updateMapScale() {
+            if (currentMap === 'deep-space') {
+                mapScale.hidden = true;
+                return;
+            }
+
+            mapScale.hidden = false;
+            const radiusKm = { earth: 6371, moon: 1737.4, mars: 3389.5 }[currentMap];
+            const sceneUnitsPerPixel = (2 * camera.position.distanceTo(earthGroup.position)
+                * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)))
+                / Math.max(1, renderer.domElement.clientHeight);
+            const kilometersPerPixel = sceneUnitsPerPixel * radiusKm / EARTH_RADIUS;
+            const targetKilometers = kilometersPerPixel * 120;
+            const magnitude = Math.pow(10, Math.floor(Math.log10(targetKilometers)));
+            const normalized = targetKilometers / magnitude;
+            const scaleKilometers = magnitude * (normalized >= 5 ? 5 : normalized >= 2 ? 2 : 1);
+            const scaleWidth = scaleKilometers / kilometersPerPixel;
+            const label = `${scaleKilometers.toLocaleString()} km`;
+
+            if (label !== lastScaleLabel) {
+                mapScaleLabel.textContent = label;
+                mapScale.setAttribute('aria-label', `Approximate map scale: ${label}`);
+                lastScaleLabel = label;
+            }
+            if (Math.abs(scaleWidth - lastScaleWidth) >= 0.5) {
+                mapScaleLine.style.width = `${scaleWidth}px`;
+                lastScaleWidth = scaleWidth;
+            }
+        }
+
+        function setMapStatus() {
+            if (currentMap === 'earth') {
+                mapStatus.textContent = 'Earth map and site data';
+                return;
+            }
+
+            if (currentMap === 'moon') {
+                const source = document.createElement('a');
+                source.href = 'https://svs.gsfc.nasa.gov/4720/';
+                source.target = '_blank';
+                source.rel = 'noopener noreferrer';
+                source.textContent = 'NASA/GSFC SVS (LRO)';
+                mapStatus.replaceChildren(document.createTextNode('LRO color map: '), source);
+                return;
+            }
+
+            if (currentMap === 'deep-space') {
+                mapStatus.textContent = 'Select a spacecraft to open its story and NASA links.';
+                return;
+            }
+
+            const marsSource = document.createElement('a');
+            marsSource.href = 'https://www.solarsystemscope.com/textures/';
+            marsSource.target = '_blank';
+            marsSource.rel = 'noopener noreferrer';
+            marsSource.textContent = 'Solar System Scope (NASA data)';
+            mapStatus.replaceChildren(document.createTextNode('Mars surface map: '), marsSource);
+        }
+
+        function createMarkerLabel(text, position, siteId) {
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            context.font = '600 23px "Segoe UI", sans-serif';
+            const paddingX = 15;
+            canvas.width = Math.ceil(context.measureText(text).width + paddingX * 2);
+            canvas.height = 50;
+
+            const labelContext = canvas.getContext('2d');
+            labelContext.font = '600 23px "Segoe UI", sans-serif';
+            labelContext.lineWidth = 2;
+            labelContext.fillStyle = 'rgba(3, 7, 18, 0.88)';
+            labelContext.strokeStyle = currentMap === 'moon'
+                ? 'rgba(148, 163, 184, 0.9)'
+                : currentMap === 'mars'
+                    ? 'rgba(239, 68, 68, 0.9)'
+                    : 'rgba(56, 189, 248, 0.82)';
+            labelContext.beginPath();
+            labelContext.roundRect(1, 1, canvas.width - 2, canvas.height - 2, 10);
+            labelContext.fill();
+            labelContext.stroke();
+            labelContext.fillStyle = '#e2e8f0';
+            labelContext.textBaseline = 'middle';
+            labelContext.fillText(text, paddingX, canvas.height / 2);
+
+            const texture = new THREE.CanvasTexture(canvas);
+            const material = new THREE.SpriteMaterial({
+                map: texture,
+                transparent: true,
+                depthTest: false,
+                depthWrite: false
+            });
+            const sprite = new THREE.Sprite(material);
+            const labelHeight = 0.36;
+            const labelOffsets = {
+                'point-nemo': [0, 0.9, 0],
+                'ksc': [1.35, 0.65, 0],
+                'jsc': [0.9, -0.75, 0],
+                'white-sands': [-1.4, 0.35, 0],
+                'apollo-11': [1.2, 0.7, 0],
+                'apollo-12': [-1.2, 0.7, 0],
+                'apollo-14': [-1.25, -0.65, 0],
+                'apollo-15': [1.25, -0.65, 0],
+                'apollo-16': [0, 1.25, 0],
+                'apollo-17': [0, -1.2, 0],
+                'viking-1': [-1.25, 0.8, 0],
+                'pathfinder': [1.4, 0.45, 0],
+                'spirit': [-1.2, -0.7, 0],
+                'opportunity': [0, 1.2, 0],
+                'phoenix': [0, -1.2, 0],
+                'curiosity': [1.3, -0.7, 0],
+                'insight': [-1.3, 0.75, 0],
+                'perseverance': [-1.4, 0.8, 0],
+                'mars-south-pole': [0, 0.5, 0.75]
+            };
+            const offset = labelOffsets[siteId] || [0, 0.45, 0];
+            const outward = position.clone().normalize();
+            const tangentOffset = new THREE.Vector3(...offset).multiplyScalar(0.25);
+            tangentOffset.addScaledVector(outward, -tangentOffset.dot(outward));
+            sprite.scale.set(labelHeight * canvas.width / canvas.height, labelHeight, 1);
+            sprite.position.copy(position)
+                .addScaledVector(outward, 0.12)
+                .add(tangentOffset);
+            sprite.userData.markerNormal = outward;
+            sprite.userData.markerId = siteId;
+            sprite.userData.baseScale = sprite.scale.clone();
+            sprite.userData.opacity = 1;
+            return sprite;
+        }
+
+        function buildMarkers(sites) {
+            markerGroup.children.slice().forEach(marker => {
+                markerGroup.remove(marker);
+                marker.geometry.dispose();
+                if (marker.material.map) {
+                    marker.material.map.dispose();
+                }
+                marker.material.dispose();
+            });
+            legendList.replaceChildren();
+            pulseRings.length = 0;
+            markerMeshes.length = 0;
+            markerLabels.length = 0;
+
+            sites.forEach(site => {
+                const pos = latLongToVector3(site.lat, site.lon, EARTH_RADIUS * 1.015);
+
+                const pinGeo = new THREE.SphereGeometry(0.08, 16, 16);
+                const pinMat = new THREE.MeshBasicMaterial({ color: 0xf97316 });
+                const pinMesh = new THREE.Mesh(pinGeo, pinMat);
+                pinMesh.position.copy(pos);
+                pinMesh.userData = site;
+                markerGroup.add(pinMesh);
+                markerMeshes.push(pinMesh);
+
+                const ringGeo = new THREE.RingGeometry(0.05, 0.22, 32);
+                const ringMat = new THREE.MeshBasicMaterial({
+                    color: 0xf97316,
+                    side: THREE.DoubleSide,
+                    transparent: true,
+                    opacity: 0.8
+                });
+                const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+                ringMesh.position.copy(pos);
+                ringMesh.lookAt(pos.clone().multiplyScalar(2));
+                markerGroup.add(ringMesh);
+                pulseRings.push(ringMesh);
+
+                const markerLabel = createMarkerLabel(site.markerLabel || site.name, pos, site.id);
+                markerGroup.add(markerLabel);
+                markerLabels.push(markerLabel);
+
+                const li = document.createElement('li');
+                const selectButton = document.createElement('button');
+                selectButton.className = 'legend-item';
+                selectButton.type = 'button';
+                selectButton.dataset.siteId = site.id;
+                const dot = document.createElement('div');
+                dot.className = 'dot-indicator';
+                const details = document.createElement('div');
+                const title = document.createElement('span');
+                title.className = 'site-title';
+                title.textContent = site.name;
+                details.append(title);
+                selectButton.append(dot, details);
+                li.appendChild(selectButton);
+
+                selectButton.addEventListener('click', () => {
+                    selectSite(site);
+                });
+                legendList.appendChild(li);
+            });
+        }
+
+        function selectSite(site) {
+            targetGlobeSpinSpeed = 0;
+            tooltip.style.display = 'none';
+            renderer.domElement.classList.remove('marker-hover');
+            openDetails(site);
+        }
+
+        function updateMarkerLabelVisibility(delta) {
+            const viewDirection = camera.position.clone().sub(earthGroup.position).normalize();
+            markerLabels.forEach(label => {
+                const markerNormal = label.userData.markerNormal.clone()
+                    .applyQuaternion(earthGroup.quaternion)
+                    .normalize();
+                const facing = THREE.MathUtils.clamp((markerNormal.dot(viewDirection) + 0.45) / 0.75, 0, 1);
+                const easedFacing = facing * facing * (3 - 2 * facing);
+                const fade = 1 - Math.exp(-4 * delta);
+                label.userData.opacity += (easedFacing - label.userData.opacity) * fade;
+                label.material.opacity = label.userData.opacity;
+                label.scale.copy(label.userData.baseScale)
+                    .multiplyScalar(0.65 + label.userData.opacity * 0.35);
+                label.visible = label.userData.opacity > 0.01;
+            });
+        }
+
+        function speechIsSupported() {
+            return typeof window.speechSynthesis !== 'undefined'
+                && typeof window.SpeechSynthesisUtterance !== 'undefined';
+        }
+
+        function stopCurrentSpeech(announce = false) {
+            const previousButton = activeSpeechButton;
+            activeSpeechButton = null;
+            activeUtterance = null;
+            speechPaused = false;
+            if (speechIsSupported()) {
+                window.speechSynthesis.cancel();
+            }
+            if (previousButton) {
+                previousButton.textContent = 'Listen';
+                previousButton.setAttribute('aria-label', `Read aloud: ${previousButton.dataset.speechLabel}`);
+            }
+            speechStopButton.hidden = true;
+            if (announce) {
+                speechStatus.textContent = 'Audio stopped.';
+            }
+        }
+
+        function createSpeechButton(label, getText) {
+            if (!speechIsSupported()) {
+                return null;
+            }
+
+            const button = document.createElement('button');
+            button.className = 'speech-button';
+            button.type = 'button';
+            button.textContent = 'Listen';
+            button.dataset.speechLabel = label;
+            button.setAttribute('aria-label', `Read aloud: ${label}`);
+            button.addEventListener('click', () => {
+                if (activeSpeechButton === button) {
+                    if (speechPaused) {
+                        window.speechSynthesis.resume();
+                        speechPaused = false;
+                        button.textContent = 'Pause';
+                        button.setAttribute('aria-label', `Pause reading: ${label}`);
+                        speechStatus.textContent = `Resumed reading ${label}.`;
+                    } else {
+                        window.speechSynthesis.pause();
+                        speechPaused = true;
+                        button.textContent = 'Resume';
+                        button.setAttribute('aria-label', `Resume reading: ${label}`);
+                        speechStatus.textContent = `Paused reading ${label}.`;
+                    }
+                    return;
+                }
+
+                stopCurrentSpeech();
+                const text = String(getText() || '').trim();
+                if (!text) {
+                    speechStatus.textContent = `No text is available to read for ${label}.`;
+                    return;
+                }
+
+                const utterance = new window.SpeechSynthesisUtterance(text);
+                activeUtterance = utterance;
+                activeSpeechButton = button;
+                speechPaused = false;
+                button.textContent = 'Pause';
+                button.setAttribute('aria-label', `Pause reading: ${label}`);
+                speechStopButton.hidden = false;
+                speechStatus.textContent = `Reading ${label}.`;
+
+                const finish = message => {
+                    if (activeUtterance !== utterance) {
+                        return;
+                    }
+                    activeUtterance = null;
+                    activeSpeechButton = null;
+                    speechPaused = false;
+                    button.textContent = 'Listen';
+                    button.setAttribute('aria-label', `Read aloud: ${label}`);
+                    speechStopButton.hidden = true;
+                    speechStatus.textContent = message;
+                };
+                utterance.onend = () => finish(`Finished reading ${label}.`);
+                utterance.onerror = event => finish(`Text-to-speech failed: ${event.error}.`);
+                window.speechSynthesis.speak(utterance);
+            });
+            return button;
+        }
+
+        function addSpeechControl(heading, label, getText) {
+            const button = createSpeechButton(label, getText);
+            if (button) {
+                heading.appendChild(button);
+            }
+        }
+
+        addSpeechControl(detailImageCredit.parentElement, 'Image description', () => [
+            detailImage.alt,
+            detailImageCredit.textContent ? `Image credit: ${detailImageCredit.textContent}` : ''
+        ].filter(Boolean).join('. '));
+        addSpeechControl(detailStatus, 'Mission status', () => `Mission status. ${detailStatusText.textContent}`);
+        addSpeechControl(detailObjectiveHeading.parentElement, 'Mission objective', () => `Mission objective. ${detailObjective.textContent}`);
+        addSpeechControl(detailInstrumentsHeading, 'Instruments and hardware', () => (
+            `Instruments and hardware. ${Array.from(detailInstruments.querySelectorAll('li'), item => item.textContent).join('. ')}`
+        ));
+        addSpeechControl(detailStoryHeading, 'Science results', () => `What scientists learned. ${detailStory.textContent}`);
+        addSpeechControl(detailChaptersHeading, 'Long-form mission story', () => (
+            Array.from(detailChapters.querySelectorAll('.drawer-chapter'), article => {
+                const heading = article.querySelector('h4');
+                const paragraph = article.querySelector('p');
+                return `${heading?.firstChild?.textContent || ''}. ${paragraph?.textContent || ''}`;
+            }).join(' ')
+        ));
+
+        function openDetails(item) {
+            stopCurrentSpeech();
+            detailInstruments.replaceChildren();
+            detailChapters.replaceChildren();
+            detailTrivia.replaceChildren();
+            detailLinks.replaceChildren();
+            detailImage.removeAttribute('src');
+            if (!detailDrawer.classList.contains('is-open')) {
+                detailsOpener = document.activeElement;
+            }
+            legendList.querySelectorAll('.legend-item').forEach(button => {
+                button.classList.toggle('is-selected', button.dataset.siteId === item.id);
+            });
+            detailTitle.textContent = item.name;
+            detailKicker.textContent = item.category === 'planet-fact' ? 'PLANET FIELD NOTE' : 'MISSION FIELD GUIDE';
+            detailObjectiveHeading.textContent = item.category === 'planet-fact' ? 'Polar science' : 'Mission objective';
+            detailStatusText.textContent = item.status || '';
+            detailStatus.hidden = !item.status;
+            detailObjective.textContent = item.objective || item.desc || '';
+            (item.instruments || []).forEach(instrument => {
+                const listItem = document.createElement('li');
+                listItem.textContent = instrument;
+                detailInstruments.appendChild(listItem);
+            });
+            detailStory.textContent = item.science || item.desc;
+            (item.chapters || []).forEach(chapter => {
+                const article = document.createElement('article');
+                article.className = 'drawer-chapter';
+                const heading = document.createElement('h4');
+                heading.textContent = chapter.heading;
+                const speechButton = createSpeechButton(chapter.heading, () => `${chapter.heading}. ${chapter.text}`);
+                if (speechButton) {
+                    heading.appendChild(speechButton);
+                }
+                const paragraph = document.createElement('p');
+                paragraph.textContent = chapter.text;
+                article.append(heading, paragraph);
+                detailChapters.appendChild(article);
+            });
+            const trivia = item.trivia || [];
+            detailTrivia.hidden = trivia.length === 0;
+            if (trivia.length > 0) {
+                const triviaHeading = document.createElement('h3');
+                triviaHeading.textContent = item.category === 'planet-fact' ? 'Planet oddities' : 'Pocket facts';
+                const allTriviaButton = createSpeechButton('All pocket facts', () => trivia.join('. '));
+                if (allTriviaButton) {
+                    triviaHeading.appendChild(allTriviaButton);
+                }
+                detailTrivia.appendChild(triviaHeading);
+                trivia.forEach(fact => {
+                    const card = document.createElement('div');
+                    card.className = 'trivia-card';
+                    const text = document.createElement('span');
+                    text.textContent = fact;
+                    card.appendChild(text);
+                    const speechButton = createSpeechButton('Pocket fact', () => fact);
+                    if (speechButton) {
+                        card.appendChild(speechButton);
+                    }
+                    detailTrivia.appendChild(card);
+                });
+            }
+            detailImage.alt = item.imageAlt || '';
+            detailImageCredit.textContent = item.imageCredit || '';
+            detailFigure.hidden = !item.image;
+            detailBody.classList.toggle('no-image', !item.image);
+            if (item.image) {
+                detailImage.src = item.image;
+            }
+
+            const links = item.links || (item.source
+                ? [{ label: 'NASA mission information', url: item.source }]
+                : []);
+            detailLinks.hidden = links.length === 0;
+            links.forEach(link => {
+                const anchor = document.createElement('a');
+                anchor.href = link.url;
+                anchor.target = '_blank';
+                anchor.rel = 'noopener noreferrer';
+                anchor.textContent = link.label;
+                detailLinks.appendChild(anchor);
+            });
+
+            detailDrawer.inert = false;
+            detailDrawer.setAttribute('aria-hidden', 'false');
+            detailDrawer.classList.add('is-open');
+            detailClose.focus({ preventScroll: true });
+        }
+
+        function closeDetails() {
+            stopCurrentSpeech();
+            if (!detailDrawer.classList.contains('is-open')) {
+                return;
+            }
+            detailDrawer.classList.remove('is-open');
+            detailDrawer.setAttribute('aria-hidden', 'true');
+            detailDrawer.inert = true;
+            if (currentMap !== 'deep-space') {
+                returnCameraToEquator();
+                targetGlobeSpinSpeed = defaultGlobeSpinSpeed;
+            }
+            if (detailsOpener && detailsOpener !== document.body && detailsOpener.isConnected) {
+                detailsOpener.focus({ preventScroll: true });
+            }
+            detailsOpener = null;
+        }
+
+        function returnCameraToEquator() {
+            const offset = camera.position.clone().sub(controls.target);
+            const distance = offset.length();
+            const azimuth = Math.atan2(offset.x, offset.z);
+            const destination = new THREE.Vector3(
+                controls.target.x + Math.sin(azimuth) * distance,
+                controls.target.y,
+                controls.target.z + Math.cos(azimuth) * distance
+            );
+            equatorReturn = {
+                from: camera.position.clone(),
+                to: destination,
+                startTime: performance.now(),
+                duration: 700,
+                dampingEnabled: controls.enableDamping,
+                controlsEnabled: controls.enabled
+            };
+            controls.enableDamping = false;
+            controls.enabled = false;
+        }
+
+        function displayCraft(index) {
+            currentCraftIndex = Math.max(0, Math.min(deepSpaceCraft.length - 1, index));
+            const craft = deepSpaceCraft[currentCraftIndex];
+            craftImage.hidden = false;
+            craftImage.src = craft.image;
+            craftImage.alt = craft.imageAlt;
+            craftName.textContent = craft.name;
+            craftSelect.setAttribute('aria-label', `Open ${craft.name} details`);
+            craftCount.textContent = `${currentCraftIndex + 1} of ${deepSpaceCraft.length}`;
+            previousSpacecraftButton.disabled = currentCraftIndex === 0;
+            nextSpacecraftButton.disabled = currentCraftIndex === deepSpaceCraft.length - 1;
+        }
+
+        function setMapMode(mode) {
+            const isMoon = mode === 'moon';
+            const isMars = mode === 'mars';
+            const isDeepSpace = mode === 'deep-space';
+            if ((isMoon && !moonTexture) || (isMars && !marsTexture)) {
+                return;
+            }
+
+            currentMap = mode;
+            closeDetails();
+            targetGlobeSpinSpeed = isDeepSpace ? 0 : defaultGlobeSpinSpeed;
+            renderer.domElement.classList.remove('marker-hover');
+            headerOverlay.classList.remove('is-obscured');
+            deepSpaceView.hidden = !isDeepSpace;
+            earthMesh.visible = !isDeepSpace;
+            markerGroup.visible = !isDeepSpace;
+            cloudMesh.visible = mode === 'earth';
+            atmosphere.visible = mode === 'earth';
+            earthButton.setAttribute('aria-pressed', String(mode === 'earth'));
+            moonButton.setAttribute('aria-pressed', String(isMoon));
+            marsButton.setAttribute('aria-pressed', String(isMars));
+            deepSpaceButton.setAttribute('aria-pressed', String(isDeepSpace));
+
+            if (isDeepSpace) {
+                pageTitle.textContent = 'NASA Deep-Space Probes';
+                pageSubtitle.textContent = 'Use the arrows to browse spacecraft. Select an image to explore its mission.';
+                document.title = 'NASA Deep-Space Probes';
+                setMapStatus();
+                return;
+            }
+
+            earthMesh.material.map = isMoon ? moonTexture : isMars ? marsTexture : earthTexture;
+            earthMesh.material.bumpMap = isMoon || isMars ? null : bumpTexture;
+            earthMesh.material.bumpScale = isMoon || isMars ? 0 : 0.04;
+            earthMesh.material.shininess = isMoon || isMars ? 4 : 15;
+            earthMesh.material.needsUpdate = true;
+            earthGroup.rotation.set(0, 0, 0);
+
+            pageTitle.textContent = isMoon ? 'NASA Apollo Lunar Sites' : isMars ? 'NASA Mars Mission Sites' : 'NASA Mission Hardware Trail';
+            pageSubtitle.textContent = 'The globe rotates to reveal mission locations. Select a marker to explore its hardware, science, image, and NASA links.';
+            document.title = isMoon ? 'NASA Apollo Lunar Sites on the Moon' : isMars ? 'NASA Mars Mission Sites' : 'NASA Mission Hardware Trail on Earth';
+            setMapStatus();
+            buildMarkers(isMoon ? moonSites : isMars ? marsSites : earthSites);
+        }
+
+        earthButton.addEventListener('click', () => setMapMode('earth'));
+        moonButton.addEventListener('click', () => setMapMode('moon'));
+        marsButton.addEventListener('click', () => setMapMode('mars'));
+        deepSpaceButton.addEventListener('click', () => setMapMode('deep-space'));
+        previousSpacecraftButton.addEventListener('click', () => {
+            displayCraft(currentCraftIndex - 1);
+        });
+        nextSpacecraftButton.addEventListener('click', () => {
+            displayCraft(currentCraftIndex + 1);
+        });
+        craftSelect.addEventListener('click', () => {
+            openDetails(deepSpaceCraft[currentCraftIndex]);
+        });
+        detailClose.addEventListener('click', closeDetails);
+        speechStopButton.addEventListener('click', () => stopCurrentSpeech(true));
+        document.addEventListener('keydown', event => {
+            if (event.key === 'Escape' && detailDrawer.classList.contains('is-open')) {
+                closeDetails();
+            }
+        });
+        detailImage.addEventListener('error', () => {
+            detailFigure.hidden = true;
+            detailBody.classList.add('no-image');
+        });
+        craftImage.addEventListener('error', () => {
+            craftImage.hidden = true;
+        });
+        craftImage.addEventListener('load', () => {
+            craftImage.hidden = false;
+        });
+        displayCraft(currentCraftIndex);
+        buildMarkers(earthSites);
+
+        textureLoader.load(
+            './moon_lroc_color_2k.jpg',
+            texture => {
+                moonTexture = texture;
+                moonButton.disabled = false;
+                moonButton.textContent = 'Moon';
+                setMapStatus();
+            },
+            undefined,
+            error => {
+                console.error('Unable to load the NASA lunar texture.', error);
+                moonButton.textContent = 'Moon unavailable';
+                mapStatus.textContent = 'Unable to load the local NASA lunar map (moon_lroc_color_2k.jpg).';
+            }
+        );
+
+        textureLoader.load(
+            './mars_color_2k.jpg',
+            texture => {
+                marsTexture = texture;
+                marsButton.disabled = false;
+                marsButton.textContent = 'Mars';
+                setMapStatus();
+            },
+            undefined,
+            error => {
+                console.error('Unable to load the Mars surface texture.', error);
+                marsButton.textContent = 'Mars unavailable';
+                if (currentMap === 'mars') {
+                    mapStatus.textContent = 'Unable to load the local Mars surface map (mars_color_2k.jpg).';
+                }
+            }
+        );
+
+        // Raycasting for Tooltips
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+        const tooltip = document.getElementById('tooltip');
+
+        window.addEventListener('mousemove', (e) => {
+            if (currentMap === 'deep-space' || e.target !== renderer.domElement) {
+                tooltip.style.display = 'none';
+                renderer.domElement.classList.remove('marker-hover');
+                return;
+            }
+
+            mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(markerMeshes.concat(earthMesh));
+
+            if (intersects.length > 0 && intersects[0].object !== earthMesh) {
+                const hoveredSite = intersects[0].object.userData;
+                tooltip.style.display = 'block';
+                tooltip.style.left = `${e.clientX}px`;
+                tooltip.style.top = `${e.clientY}px`;
+                tooltip.innerHTML = `<strong>${hoveredSite.markerLabel || hoveredSite.name}</strong><br>Click to explore`;
+                renderer.domElement.classList.add('marker-hover');
+            } else {
+                tooltip.style.display = 'none';
+                renderer.domElement.classList.remove('marker-hover');
+            }
+        });
+
+        renderer.domElement.addEventListener('click', event => {
+            if (currentMap === 'deep-space') {
+                return;
+            }
+            const bounds = renderer.domElement.getBoundingClientRect();
+            mouse.x = ((event.clientX - bounds.left) / bounds.width) * 2 - 1;
+            mouse.y = -((event.clientY - bounds.top) / bounds.height) * 2 + 1;
+            raycaster.setFromCamera(mouse, camera);
+
+            const intersects = raycaster.intersectObjects(markerMeshes.concat(earthMesh));
+            if (intersects.length > 0 && intersects[0].object !== earthMesh) {
+                selectSite(intersects[0].object.userData);
+            }
+        });
+
+        // Starfield Background
+        function createStars() {
+            const starGeo = new THREE.BufferGeometry();
+            const count = 1500;
+            const positions = new Float32Array(count * 3);
+
+            for (let i = 0; i < count * 3; i += 3) {
+                const r = 150 + Math.random() * 100;
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.acos(2 * Math.random() - 1);
+
+                positions[i] = r * Math.sin(phi) * Math.cos(theta);
+                positions[i + 1] = r * Math.sin(phi) * Math.sin(theta);
+                positions[i + 2] = r * Math.cos(phi);
+            }
+
+            starGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            const starMat = new THREE.PointsMaterial({ color: 0x888888, size: 0.7 });
+            const stars = new THREE.Points(starGeo, starMat);
+            scene.add(stars);
+        }
+        createStars();
+
+        // Main Animation Loop
+        let time = 0;
+        const animationClock = new THREE.Clock();
+        function animate() {
+            requestAnimationFrame(animate);
+            const delta = Math.min(animationClock.getDelta(), 0.05);
+            time += 0.025;
+
+            globeSpinSpeed += (targetGlobeSpinSpeed - globeSpinSpeed) * (1 - Math.exp(-4 * delta));
+            earthGroup.rotation.y += globeSpinSpeed * delta * 60;
+            cloudMesh.rotation.y += 0.00007 * (globeSpinSpeed / defaultGlobeSpinSpeed) * delta * 60;
+
+            // Pulse marker ring animation
+            pulseRings.forEach(ring => {
+                const scale = 1 + Math.sin(time * 2.5) * 0.45;
+                ring.scale.set(scale, scale, scale);
+                ring.material.opacity = 0.8 - (scale - 0.55) * 0.6;
+            });
+
+            if (equatorReturn) {
+                const progress = Math.min(1, (performance.now() - equatorReturn.startTime) / equatorReturn.duration);
+                const easedProgress = progress * progress * (3 - 2 * progress);
+                camera.position.lerpVectors(equatorReturn.from, equatorReturn.to, easedProgress);
+                controls.update();
+                if (progress === 1) {
+                    controls.enableDamping = equatorReturn.dampingEnabled;
+                    controls.enabled = equatorReturn.controlsEnabled;
+                    equatorReturn = null;
+                }
+            } else {
+                controls.update();
+            }
+            updateHeaderVisibility();
+            updateMapScale();
+            updateMarkerLabelVisibility(delta);
+            renderer.render(scene, camera);
+        }
+
+        // Window Resize Listener
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Start render loop on load
+        window.onload = function() {
+            animate();
+        };
+    </script>
+</body>
+</html>
